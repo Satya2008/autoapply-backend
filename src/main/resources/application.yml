@@ -1,52 +1,89 @@
+# -----------------------------------------------------------------------------
+# Bootstrap configuration only.
+#
+# Everything about how the product behaves - API keys, schedules, limits, prompts,
+# job sources, portal selectors - lives in the database and is edited from the admin
+# dashboard at /admin/settings. Only the things needed to reach the database and
+# start the process belong in this file.
+# -----------------------------------------------------------------------------
+
 server:
-  port: 8080
+  port: ${SERVER_PORT:8080}
+  compression:
+    enabled: true
+  error:
+    include-message: always
 
 spring:
   application:
     name: autoapply-backend
 
+  # Swap databases with environment variables alone - H2 by default, MySQL or
+  # PostgreSQL by setting DB_URL, DB_USERNAME, DB_PASSWORD and DB_DRIVER.
   datasource:
-    url: jdbc:postgresql://localhost:5432/autoapply
-    username: postgres
-    password: your_password
-    driver-class-name: org.postgresql.Driver
+    url: ${DB_URL:jdbc:h2:file:./data/autoapply;DB_CLOSE_ON_EXIT=FALSE}
+    username: ${DB_USERNAME:sa}
+    password: ${DB_PASSWORD:}
+    driver-class-name: ${DB_DRIVER:org.h2.Driver}
+    hikari:
+      maximum-pool-size: ${DB_POOL_SIZE:10}
+      connection-timeout: 20000
 
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: ${DDL_AUTO:update}
     show-sql: false
+    open-in-view: false
     properties:
       hibernate:
-        dialect: org.hibernate.dialect.PostgreSQLDialect
+        jdbc:
+          batch_size: 50
+        order_inserts: true
+
+  h2:
+    console:
+      enabled: ${H2_CONSOLE:true}
+      path: /h2-console
 
   data:
     redis:
-      host: localhost
-      port: 6379
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      timeout: 3000
+      connect-timeout: 3000
 
-# JSearch API (RapidAPI)
-jsearch:
-  api:
-    key: YOUR_JSEARCH_API_KEY
-    base-url: https://jsearch.p.rapidapi.com
-    host: jsearch.p.rapidapi.com
+  servlet:
+    multipart:
+      max-file-size: 25MB
+      max-request-size: 25MB
 
-# Gemini API (Free AI)
-gemini:
-  api:
-    key: YOUR_GEMINI_API_KEY
-    base-url: https://generativelanguage.googleapis.com/v1beta
+  task:
+    execution:
+      pool:
+        core-size: 4
+        max-size: 16
 
-# JWT
-jwt:
-  secret: your_jwt_secret_key_minimum_256_bits
-  expiration: 86400000  # 24 hours
+app:
+  encryption:
+    # Used to encrypt secret settings at rest. Set APP_ENCRYPTION_KEY in production.
+    key: ${APP_ENCRYPTION_KEY:}
 
-# Job Fetch Schedule
-job:
-  fetch:
-    cron: "0 0 */6 * * *"  # Every 6 hours
-    queries:
-      - "Java Developer in India"
-      - "Spring Boot Developer in India"
-      - "Backend Developer Java India"
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,loggers
+  endpoint:
+    health:
+      show-details: when-authorized
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: alpha
+
+logging:
+  level:
+    com.autoapply: ${LOG_LEVEL:INFO}
+    org.springframework.web: WARN
+    org.hibernate: WARN
