@@ -24,6 +24,10 @@ public interface ApplicationRepository extends JpaRepository<Application, String
 
     long countByStatus(String status);
 
+    long countByUserIdAndStatus(String userId, String status);
+
+    List<Application> findByUserIdAndStatusOrderByMatchScoreDesc(String userId, String status);
+
     long countByAppliedAtAfter(LocalDateTime after);
 
     List<Application> findTop10ByOrderByAppliedAtDesc();

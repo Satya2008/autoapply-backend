@@ -131,6 +131,29 @@ public final class SettingCatalog {
         def(APPLY_WORKING_HOUR_END, "19", INTEGER, "Auto Apply", "Working hours end (0-23)", null, false, 120);
         def(APPLY_SKIP_WEEKENDS, "true", BOOLEAN, "Auto Apply", "Do not apply on Saturday and Sunday", null, false, 130);
 
+        def(APPLY_RISK_HIGH_DOMAINS,
+                "linkedin.com,naukri.com,indeed.com,glassdoor.com,myworkdayjobs.com,workday.com,"
+                        + "taleo.net,icims.com,successfactors.com,shine.com,monster.com,foundit.in,"
+                        + "instahyre.com,cutshort.io,hirist.com,angel.co,wellfound.com",
+                TEXT, "Auto Apply · Safety",
+                "Sites that detect and block automated submissions. Applications here are never "
+                        + "submitted by the engine - they go to the candidate's assisted queue with every "
+                        + "answer prepared, so one click and a paste finishes the job.",
+                null, false, 140);
+        def(APPLY_RISK_LOW_DOMAINS,
+                "boards.greenhouse.io,jobs.lever.co,apply.workable.com,jobs.ashbyhq.com,"
+                        + "breezy.hr,recruitee.com,smartrecruiters.com,teamtailor.com,personio.de,join.com",
+                TEXT, "Auto Apply · Safety",
+                "Applicant tracking systems with plain forms. Safe to submit automatically.",
+                null, false, 150);
+        def(APPLY_AUTOMATE_MEDIUM_RISK, "false", BOOLEAN, "Auto Apply · Safety",
+                "Also automate sites that are neither known-safe nor known-risky. Off is the cautious choice.",
+                null, false, 160);
+        def(APPLY_ASSIST_QUEUE_ENABLED, "true", BOOLEAN, "Auto Apply · Safety",
+                "Queue risky roles for the candidate instead of silently skipping them", null, false, 170);
+        def(APPLY_ASSIST_MAX_QUEUE, "25", INTEGER, "Auto Apply · Safety",
+                "Most assisted applications to keep waiting at once", null, false, 180);
+
         // ------------------------------------------------------------ Selenium
         def(SELENIUM_ENABLED, "false", BOOLEAN, "Browser Automation",
                 "Allow the browser engine to run. Requires a browser on the host.", null, false, 10);

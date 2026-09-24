@@ -98,6 +98,11 @@ public final class SettingKeys {
     public static final String APPLY_WORKING_HOUR_START = "apply.working.hour.start";
     public static final String APPLY_WORKING_HOUR_END = "apply.working.hour.end";
     public static final String APPLY_SKIP_WEEKENDS = "apply.skip.weekends";
+    public static final String APPLY_RISK_HIGH_DOMAINS = "apply.risk.high.domains";
+    public static final String APPLY_RISK_LOW_DOMAINS = "apply.risk.low.domains";
+    public static final String APPLY_AUTOMATE_MEDIUM_RISK = "apply.automate.medium.risk";
+    public static final String APPLY_ASSIST_QUEUE_ENABLED = "apply.assist.queue.enabled";
+    public static final String APPLY_ASSIST_MAX_QUEUE = "apply.assist.max.queue";
 
     // ---------- selenium ----------
     public static final String SELENIUM_ENABLED = "selenium.enabled";

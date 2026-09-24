@@ -76,6 +76,15 @@ public class ApplyPortalConfig {
     @Column(columnDefinition = "TEXT")
     private String dismissSelectors;
 
+    /**
+     * How aggressively this site defends against automation. HIGH sites are never driven
+     * by the engine; their applications are handed to the candidate pre-filled instead.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(length = 10)
+    @Builder.Default
+    private com.autoapply.apply.risk.BotRisk botRisk = com.autoapply.apply.risk.BotRisk.MEDIUM;
+
     /** When true the engine fills the form but never clicks submit - useful for testing. */
     @Builder.Default
     private Boolean dryRun = false;

@@ -44,4 +44,30 @@ public class ApplyController {
         String userId = userService.getByEmail(principal.getUsername()).getId();
         return ApiResponse.ok(analyticsService.userStats(userId));
     }
+
+    @GetMapping("/assisted")
+    @Operation(summary = "Roles the engine will not submit, each with every answer prepared",
+            description = "Sites that detect automation are never driven by the browser engine. "
+                    + "They appear here instead, with the candidate's answers ready to paste so "
+                    + "finishing one takes a click and a few pastes.")
+    public ApiResponse<List<AutoApplyService.AssistedApplication>> assisted(
+            @AuthenticationPrincipal UserDetails principal) {
+        String userId = userService.getByEmail(principal.getUsername()).getId();
+        return ApiResponse.ok(autoApplyService.getAssistedQueue(userId));
+    }
+
+    @PostMapping("/assisted/{id}/done")
+    @Operation(summary = "Mark an assisted application as submitted")
+    public ApiResponse<Application> markDone(@AuthenticationPrincipal UserDetails principal,
+                                             @PathVariable String id) {
+        String userId = userService.getByEmail(principal.getUsername()).getId();
+        return ApiResponse.ok(autoApplyService.markApplied(userId, id), "Marked as applied");
+    }
+
+    @PostMapping("/assisted/{id}/skip")
+    public ApiResponse<Application> skip(@AuthenticationPrincipal UserDetails principal,
+                                         @PathVariable String id) {
+        String userId = userService.getByEmail(principal.getUsername()).getId();
+        return ApiResponse.ok(autoApplyService.skipAssisted(userId, id), "Skipped");
+    }
 }

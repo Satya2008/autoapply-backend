@@ -4,6 +4,7 @@ import com.autoapply.apply.engine.ApplyOutcome;
 import com.autoapply.apply.engine.BrowserApplyEngine;
 import com.autoapply.apply.entity.Application;
 import com.autoapply.apply.repository.ApplicationRepository;
+import com.autoapply.apply.risk.ApplyRiskAssessor;
 import com.autoapply.audit.AuditAction;
 import com.autoapply.audit.AuditService;
 import com.autoapply.jobs.entity.Job;
@@ -43,6 +44,8 @@ public class AutoApplyService {
     private final JobRepository jobRepository;
     private final UserService userService;
     private final BrowserApplyEngine browserEngine;
+    private final ApplyRiskAssessor riskAssessor;
+    private final PrefillService prefillService;
     private final AiService aiService;
     private final NotificationService notificationService;
     private final SettingsService settings;
@@ -51,27 +54,29 @@ public class AutoApplyService {
 
     public RunSummary runForAllUsers() {
         if (!settings.getBoolean(SettingKeys.APPLY_ENABLED, true)) {
-            return new RunSummary(0, 0, 0, "Auto apply is disabled in settings");
+            return new RunSummary(0, 0, 0, 0, "Auto apply is disabled in settings");
         }
         if (!isWithinWorkingWindow()) {
-            return new RunSummary(0, 0, 0, "Outside the configured working window");
+            return new RunSummary(0, 0, 0, 0, "Outside the configured working window");
         }
 
         List<User> candidates = userService.findAutoApplyCandidates();
         int applied = 0;
+        int queued = 0;
         int failed = 0;
         int skipped = 0;
 
         for (User user : candidates) {
             RunSummary summary = runForUser(user.getId());
             applied += summary.applied();
+            queued += summary.queued();
             failed += summary.failed();
             skipped += summary.skipped();
         }
 
-        log.info("Auto apply sweep across {} users: {} applied, {} failed, {} skipped",
-                candidates.size(), applied, failed, skipped);
-        return new RunSummary(applied, failed, skipped,
+        log.info("Auto apply sweep across {} users: {} applied, {} queued for the candidate, "
+                + "{} failed, {} skipped", candidates.size(), applied, queued, failed, skipped);
+        return new RunSummary(applied, queued, failed, skipped,
                 "Processed " + candidates.size() + " users");
     }
 
@@ -80,10 +85,10 @@ public class AutoApplyService {
         User user = userService.getById(userId);
 
         if (!settings.getBoolean(SettingKeys.APPLY_ENABLED, true)) {
-            return new RunSummary(0, 0, 0, "Auto apply is disabled in settings");
+            return new RunSummary(0, 0, 0, 0, "Auto apply is disabled in settings");
         }
         if (!Boolean.TRUE.equals(user.getAutoApplyEnabled())) {
-            return new RunSummary(0, 0, 0, "Auto apply is switched off for this user");
+            return new RunSummary(0, 0, 0, 0, "Auto apply is switched off for this user");
         }
 
         int dailyLimit = user.getDailyApplyLimit() != null
@@ -93,7 +98,7 @@ public class AutoApplyService {
                 userId, LocalDateTime.now().minusDays(1));
         int remaining = (int) (dailyLimit - alreadyToday);
         if (remaining <= 0) {
-            return new RunSummary(0, 0, 0, "Daily limit of " + dailyLimit + " already reached");
+            return new RunSummary(0, 0, 0, 0, "Daily limit of " + dailyLimit + " already reached");
         }
 
         double minScore = user.getMinMatchScore() != null
@@ -103,6 +108,7 @@ public class AutoApplyService {
 
         List<JobMatch> queue = jobMatchRepository.findApplicable(userId, minScore);
         int applied = 0;
+        int queued = 0;
         int failed = 0;
         int skipped = 0;
 
@@ -121,6 +127,7 @@ public class AutoApplyService {
             Application application = submit(user, job, match, useBrowser);
             switch (application.getStatus()) {
                 case "APPLIED", "DRY_RUN" -> applied++;
+                case "NEEDS_YOU" -> queued++;
                 case "FAILED", "RETRY_SCHEDULED" -> failed++;
                 default -> skipped++;
             }
@@ -129,17 +136,18 @@ public class AutoApplyService {
             match.setAppliedAt(LocalDateTime.now());
             jobMatchRepository.save(match);
 
-            if (applied + failed < remaining) humanPause();
+            if (applied + failed < remaining && !"NEEDS_YOU".equals(application.getStatus())) humanPause();
         }
 
         auditService.record(user.getEmail(), AuditAction.AUTO_APPLY_RUN, "user", userId,
-                "applied=" + applied + " failed=" + failed + " skipped=" + skipped);
-        return new RunSummary(applied, failed, skipped, "Completed for " + user.getEmail());
+                "applied=" + applied + " queued=" + queued + " failed=" + failed + " skipped=" + skipped);
+        return new RunSummary(applied, queued, failed, skipped, "Completed for " + user.getEmail());
     }
 
     @Transactional
     public Application submit(User user, Job job, JobMatch match, boolean useBrowser) {
         String coverLetter = generateCoverLetter(user, job);
+        ApplyRiskAssessor.Assessment risk = riskAssessor.assess(job.getJobApplyLink());
 
         Application application = Application.builder()
                 .userId(user.getId())
@@ -148,16 +156,22 @@ public class AutoApplyService {
                 .employerName(job.getEmployerName())
                 .applyLink(job.getJobApplyLink())
                 .portal(job.getJobPublisher())
+                .portalCode(risk.portal() == null ? null : risk.portal().getCode())
                 .matchScore(match == null ? null : match.getMatchScore())
                 .coverLetter(coverLetter)
+                .botRisk(risk.risk())
+                .riskReason(risk.reason())
                 .attemptCount(1)
                 .build();
 
         if (!useBrowser) {
             application.setStatus("APPLIED");
+            application.setSubmittedVia("SIMULATED");
             application.setMessage("Recorded in simulate mode - no browser was used");
-        } else {
+
+        } else if (riskAssessor.canAutomate(risk)) {
             ApplyOutcome outcome = browserEngine.apply(user, job, coverLetter);
+            application.setSubmittedVia("AUTO");
             application.setMessage(outcome.message());
             application.setScreenshotPath(outcome.screenshotPath());
             application.setStatus(switch (outcome.status()) {
@@ -166,6 +180,15 @@ public class AutoApplyService {
                 case SKIPPED -> "SKIPPED";
                 case FAILED -> scheduleRetryIfAllowed(application);
             });
+
+        } else {
+            // The site blocks automation. Prepare every answer and hand it to the candidate.
+            application.setStatus(settings.getBoolean(SettingKeys.APPLY_ASSIST_QUEUE_ENABLED, true)
+                    ? "NEEDS_YOU" : "SKIPPED");
+            application.setSubmittedVia("ASSISTED");
+            application.setPrefillJson(prefillService.build(user, job, coverLetter));
+            application.setMessage(risk.reason()
+                    + ". Everything is filled in for you - open the posting and paste.");
         }
 
         Application saved = applicationRepository.save(application);
@@ -275,6 +298,49 @@ public class AutoApplyService {
         return applicationRepository.findByUserIdOrderByAppliedAtDesc(userId);
     }
 
+    // --------------------------------------------------- assisted applications
+
+    /** Roles the engine will not submit, with every answer already prepared. */
+    public List<AssistedApplication> getAssistedQueue(String userId) {
+        return applicationRepository.findByUserIdAndStatusOrderByMatchScoreDesc(userId, "NEEDS_YOU")
+                .stream()
+                .map(application -> new AssistedApplication(
+                        application, prefillService.parse(application.getPrefillJson())))
+                .toList();
+    }
+
+    @Transactional
+    public Application markApplied(String userId, String applicationId) {
+        Application application = requireOwned(userId, applicationId);
+        application.setStatus("APPLIED");
+        application.setMessage("Submitted by you on the site");
+        application.setSubmittedVia("ASSISTED");
+        Application saved = applicationRepository.save(application);
+        auditService.record(userService.getById(userId).getEmail(),
+                AuditAction.APPLICATION_SUBMITTED, "application", applicationId, "assisted");
+        return saved;
+    }
+
+    @Transactional
+    public Application skipAssisted(String userId, String applicationId) {
+        Application application = requireOwned(userId, applicationId);
+        application.setStatus("SKIPPED");
+        application.setMessage("You chose to skip this one");
+        return applicationRepository.save(application);
+    }
+
+    private Application requireOwned(String userId, String applicationId) {
+        Application application = applicationRepository.findById(applicationId)
+                .orElseThrow(() -> com.autoapply.common.AppException.notFound("Application"));
+        if (!application.getUserId().equals(userId)) {
+            throw com.autoapply.common.AppException.forbidden("That application belongs to someone else");
+        }
+        return application;
+    }
+
+    public record AssistedApplication(Application application, List<Map<String, Object>> prefill) {
+    }
+
     private String nullSafe(String value) {
         return value == null ? "" : value;
     }
@@ -283,6 +349,6 @@ public class AutoApplyService {
         return value.length() <= max ? value : value.substring(0, max);
     }
 
-    public record RunSummary(int applied, int failed, int skipped, String message) {
+    public record RunSummary(int applied, int queued, int failed, int skipped, String message) {
     }
 }

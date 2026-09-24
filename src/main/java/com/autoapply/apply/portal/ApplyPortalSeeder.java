@@ -1,5 +1,6 @@
 package com.autoapply.apply.portal;
 
+import com.autoapply.apply.risk.BotRisk;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
@@ -27,6 +28,7 @@ public class ApplyPortalSeeder {
 
         repository.save(ApplyPortalConfig.builder()
                 .code("greenhouse")
+                .botRisk(BotRisk.LOW)
                 .name("Greenhouse")
                 .urlPattern("boards.greenhouse.io")
                 .enabled(true)
@@ -51,6 +53,7 @@ public class ApplyPortalSeeder {
 
         repository.save(ApplyPortalConfig.builder()
                 .code("lever")
+                .botRisk(BotRisk.LOW)
                 .name("Lever")
                 .urlPattern("jobs.lever.co")
                 .enabled(true)
@@ -75,6 +78,7 @@ public class ApplyPortalSeeder {
 
         repository.save(ApplyPortalConfig.builder()
                 .code("workable")
+                .botRisk(BotRisk.LOW)
                 .name("Workable")
                 .urlPattern("apply.workable.com")
                 .enabled(true)
@@ -98,6 +102,7 @@ public class ApplyPortalSeeder {
 
         repository.save(ApplyPortalConfig.builder()
                 .code("generic_form")
+                .botRisk(BotRisk.MEDIUM)
                 .name("Generic application form")
                 .urlPattern("(?i).*(careers|jobs|apply).*")
                 .enabled(false)

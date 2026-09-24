@@ -32,9 +32,31 @@ public class Application {
     @Column(length = 2000)
     private String applyLink;
 
-    /** PENDING, APPLIED, DRY_RUN, SKIPPED, FAILED, RETRY_SCHEDULED, INTERVIEW, REJECTED, OFFER */
+    /**
+     * PENDING, APPLIED, DRY_RUN, NEEDS_YOU, SKIPPED, FAILED, RETRY_SCHEDULED,
+     * INTERVIEW, REJECTED, OFFER
+     *
+     * NEEDS_YOU means the site blocks automation, so the answers are prepared and the
+     * candidate finishes it themselves in one click.
+     */
     @Column(length = 24)
     private String status;
+
+    /** How the application was submitted: AUTO, ASSISTED or SIMULATED. */
+    @Column(length = 12)
+    private String submittedVia;
+
+    @Enumerated(EnumType.STRING)
+    @Column(length = 10)
+    private com.autoapply.apply.risk.BotRisk botRisk;
+
+    @Column(length = 400)
+    private String riskReason;
+
+    /** Every answer this application needs, as JSON, ready for the candidate to paste. */
+    @Lob
+    @Column(columnDefinition = "TEXT")
+    private String prefillJson;
 
     private String portal;
     private String portalCode;
