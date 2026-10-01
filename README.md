@@ -37,6 +37,18 @@ Workday), it prepares every answer so the candidate can submit in one click.
 | Health | http://localhost:8080/actuator/health |
 | Swagger UI | http://localhost:8080/swagger-ui.html |
 
+## Try the API
+
+There is no login yet. In the `dev` profile the caller is identified by an `X-User-Id`
+header (Phase 8 replaces this with JWT).
+
+1. `POST /api/v1/dev/users` with `{"email": "you@example.com"}` and copy the returned `id`.
+2. In Swagger UI, click **Authorize** and paste that id.
+3. Call `GET/PUT /api/v1/me/profile` and `GET/PUT /api/v1/me/skills`.
+
+Errors come back as [Problem Details](https://www.rfc-editor.org/rfc/rfc9457)
+(`application/problem+json`), with field errors under `errors`.
+
 ## Tests
 
 ```bash
@@ -51,4 +63,6 @@ on every run.
 The backend is built in 20 phases, starting as a modular monolith. Later phases add Redis,
 Kafka, AI matching and payments, and split it into microservices.
 
-**Current: Phase 0, project setup.**
+- [x] Phase 0: project setup
+- [x] Phase 1: profile module (users, profiles, skills)
+- [ ] Phase 2: resume upload and skill extraction
