@@ -16,7 +16,7 @@ client ──► gateway :8080 ──► core-api :8081 ──► MySQL naukrira
 | Module | Port | What it owns | Status |
 |---|---|---|---|
 | `gateway` | 8080 | The only public entry point. Routes requests, and serves one Swagger UI for all services | ✅ |
-| `core-api` | 8081 | Users, profiles, skills; later resumes and applications | ✅ |
+| `core-api` | 8081 | Users, profiles, skills, resumes; later applications | ✅ |
 | `job-service` | 8082 | Fetching, de-duplicating and searching jobs | Phase 3 |
 | `matching-service` | 8083 | Scoring jobs against profiles | Phase 5 |
 | `apply-worker` | 8084 | Browser automation for low-risk portals | Phase 15 |
@@ -28,6 +28,7 @@ client ──► gateway :8080 ──► core-api :8081 ──► MySQL naukrira
 - Java 21, Spring Boot 4.1, Spring Cloud Gateway 2025.1, Gradle (wrapper)
 - MySQL 8, one database per service
 - Spring Data JPA, Bean Validation, Actuator, springdoc OpenAPI, Lombok
+- Apache PDFBox and POI for reading resumes
 
 ## Run locally
 
@@ -63,6 +64,20 @@ gateway verifies a JWT and sets this header itself.
 1. `POST /api/v1/dev/users` with `{"email": "you@example.com"}` and copy the returned `id`.
 2. In Swagger UI, click **Authorize** and paste that id.
 3. Call `GET/PUT /api/v1/me/profile` and `GET/PUT /api/v1/me/skills`.
+4. Upload a resume with `POST /api/v1/me/resume` (multipart field `file`, PDF or DOCX, up
+   to 10 MB). The response lists the skills found; they are added to the profile without
+   touching skills you entered yourself.
+
+| Resume endpoint | What it does |
+|---|---|
+| `POST /api/v1/me/resume` | Upload or replace; returns skills found |
+| `GET /api/v1/me/resume` | File name, size, upload time |
+| `GET /api/v1/me/resume/file` | Download the file |
+| `DELETE /api/v1/me/resume` | Remove the resume and its file |
+
+The file type is checked from the file's bytes, not its name, so a renamed `.exe` is
+refused. Files are kept under `core-api/data/files` in dev
+(`naukriradar.storage.local-dir`).
 
 Errors come back as [Problem Details](https://www.rfc-editor.org/rfc/rfc9457)
 (`application/problem+json`), with field errors under `errors`.
@@ -82,4 +97,5 @@ tests route to a fake service, so they need no database.
 - [x] Phase 0: project setup
 - [x] Phase 1: profile (users, profiles, skills)
 - [x] Microservices layout: gateway, core-api, shared library
-- [ ] Phase 2: resume upload and skill extraction
+- [x] Phase 2: resume upload and skill extraction
+- [ ] Phase 3: job-service with the first job board

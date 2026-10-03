@@ -13,3 +13,6 @@ bin/
 # Local secrets and logs
 .env
 *.log
+
+# Uploaded files in dev
+data/

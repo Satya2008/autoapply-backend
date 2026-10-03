@@ -1,0 +1,159 @@
+# Skills we look for in resumes.
+# Format: canonical | alias, alias
+# Spaces and hyphens in a term are flexible ("spring boot" also matches "spring-boot"
+# and "springboot"). Leave out words that are too common in plain English (go, express,
+# node, r, c) or the extractor will see them everywhere.
+
+# Languages
+java
+javascript        | js, ecmascript, es6
+typescript
+python            | python3
+kotlin
+scala
+golang            | go lang
+rust
+c++               | cpp
+c#                | csharp, c sharp
+php
+ruby
+swift
+dart
+sql
+pl/sql            | plsql
+bash              | shell scripting, shell script
+
+# Java ecosystem
+spring            | spring framework
+spring boot
+spring mvc
+spring security
+spring data jpa   | spring data
+spring cloud
+spring batch
+hibernate
+jpa
+jdbc
+j2ee              | java ee, jakarta ee
+servlets          | servlet
+jsp
+struts
+thymeleaf
+lombok
+maven
+gradle
+junit             | junit5, junit 5
+mockito
+testng
+tomcat
+multithreading    | multi threading, concurrency
+
+# APIs and architecture
+rest api          | rest apis, restful, restful api, restful apis, restful services, rest services
+graphql
+grpc
+soap
+microservices     | microservice, micro services
+system design
+design patterns
+oop               | oops, object oriented programming
+data structures   | dsa, data structures and algorithms
+algorithms
+jwt
+oauth             | oauth2, oauth 2.0
+swagger           | openapi
+websocket         | websockets
+
+# Front end
+html              | html5
+css               | css3
+sass              | scss
+react             | react.js, reactjs
+react native
+angular           | angularjs, angular.js
+vue               | vue.js, vuejs
+next.js           | nextjs
+redux
+jquery
+bootstrap
+tailwind          | tailwind css, tailwindcss
+webpack
+
+# Back end, other stacks
+node.js           | nodejs
+express.js        | expressjs
+django
+flask
+fastapi
+.net              | dotnet
+asp.net
+
+# Data stores
+mysql
+postgresql        | postgres
+oracle database   | oracle db
+sql server        | mssql, microsoft sql server
+mongodb           | mongo db
+cassandra
+dynamodb
+redis
+memcached
+elasticsearch     | elastic search
+firebase
+
+# Messaging
+kafka             | apache kafka
+rabbitmq          | rabbit mq
+activemq
+
+# Cloud and DevOps
+aws               | amazon web services
+azure             | microsoft azure
+gcp               | google cloud, google cloud platform
+docker
+kubernetes        | k8s
+helm
+terraform
+ansible
+jenkins
+github actions
+ci/cd             | cicd
+git
+github
+gitlab
+bitbucket
+linux
+unix
+nginx
+prometheus
+grafana
+kibana
+splunk
+sonarqube
+
+# Mobile
+android
+ios
+flutter
+
+# Data and AI
+pandas
+numpy
+scikit-learn      | sklearn, scikit learn
+tensorflow
+pytorch
+machine learning
+deep learning
+nlp               | natural language processing
+llm               | llms, large language models
+langchain
+
+# Testing and tools
+selenium
+cucumber
+postman
+jira
+
+# Ways of working
+agile
+scrum

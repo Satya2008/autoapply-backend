@@ -6,3 +6,7 @@ spring:
   jpa:
     hibernate:
       ddl-auto: create-drop
+
+naukriradar:
+  storage:
+    local-dir: build/test-files
