@@ -18,11 +18,13 @@ import org.springframework.test.context.DynamicPropertySource;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** Starts the gateway in front of a fake core-api and checks what reaches it. */
+/** Starts the gateway in front of fake services and checks what reaches each one. */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class GatewayRoutingTests {
 
-	private static final HttpServer coreApi = startFakeCoreApi();
+	private static final HttpServer coreApi = startFakeService("core-api");
+
+	private static final HttpServer jobService = startFakeService("job-service");
 
 	private final HttpClient client = HttpClient.newHttpClient();
 
@@ -32,11 +34,13 @@ class GatewayRoutingTests {
 	@DynamicPropertySource
 	static void routeToFake(DynamicPropertyRegistry registry) {
 		registry.add("services.core-api", () -> "http://localhost:" + coreApi.getAddress().getPort());
+		registry.add("services.job-service", () -> "http://localhost:" + jobService.getAddress().getPort());
 	}
 
 	@AfterAll
 	static void stopFake() {
 		coreApi.stop(0);
+		jobService.stop(0);
 	}
 
 	@Test
@@ -56,6 +60,18 @@ class GatewayRoutingTests {
 	}
 
 	@Test
+	void jobSourceAdminRequestsReachJobService() throws Exception {
+		HttpResponse<String> list = send(HttpRequest.newBuilder(uri("/api/v1/admin/job-sources")));
+		HttpResponse<String> fetch = send(HttpRequest.newBuilder(uri("/api/v1/admin/job-sources/abc/fetch"))
+				.POST(HttpRequest.BodyPublishers.noBody()));
+		HttpResponse<String> docs = send(HttpRequest.newBuilder(uri("/docs/job-service")));
+
+		assertThat(list.body()).isEqualTo("job-service saw GET /api/v1/admin/job-sources as null");
+		assertThat(fetch.body()).isEqualTo("job-service saw POST /api/v1/admin/job-sources/abc/fetch as null");
+		assertThat(docs.body()).isEqualTo("job-service saw GET /v3/api-docs as null");
+	}
+
+	@Test
 	void unknownPathsAreNotForwarded() throws Exception {
 		HttpResponse<String> response = send(HttpRequest.newBuilder(uri("/api/v1/unknown")));
 
@@ -70,12 +86,12 @@ class GatewayRoutingTests {
 		return client.send(request.build(), HttpResponse.BodyHandlers.ofString());
 	}
 
-	/** Echoes back the method, path and user header it received. */
-	private static HttpServer startFakeCoreApi() {
+	/** Echoes back its name, the method, path and user header it received. */
+	private static HttpServer startFakeService(String name) {
 		try {
 			HttpServer server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
 			server.createContext("/", exchange -> {
-				String body = "core-api saw " + exchange.getRequestMethod() + " " + exchange.getRequestURI().getPath()
+				String body = name + " saw " + exchange.getRequestMethod() + " " + exchange.getRequestURI().getPath()
 						+ " as " + exchange.getRequestHeaders().getFirst("X-User-Id");
 				byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
 				exchange.sendResponseHeaders(200, bytes.length);

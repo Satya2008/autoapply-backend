@@ -10,14 +10,15 @@ Microservices from the start, each in its own Gradle module with its own databas
 one repository.
 
 ```
-client ──► gateway :8080 ──► core-api :8081 ──► MySQL naukriradar_core
+client ──► gateway :8080 ─┬─► core-api    :8081 ──► MySQL naukriradar_core
+                          └─► job-service :8082 ──► MySQL naukriradar_job ──► job boards
 ```
 
 | Module | Port | What it owns | Status |
 |---|---|---|---|
 | `gateway` | 8080 | The only public entry point. Routes requests, and serves one Swagger UI for all services | ✅ |
 | `core-api` | 8081 | Users, profiles, skills, resumes; later applications | ✅ |
-| `job-service` | 8082 | Fetching, de-duplicating and searching jobs | Phase 3 |
+| `job-service` | 8082 | Job boards as configuration; fetching, cleaning and storing jobs | ✅ |
 | `matching-service` | 8083 | Scoring jobs against profiles | Phase 5 |
 | `apply-worker` | 8084 | Browser automation for low-risk portals | Phase 15 |
 | `notification-service` | 8085 | Email, Telegram, daily digest | Phase 16 |
@@ -29,14 +30,17 @@ client ──► gateway :8080 ──► core-api :8081 ──► MySQL naukrira
 - MySQL 8, one database per service
 - Spring Data JPA, Bean Validation, Actuator, springdoc OpenAPI, Lombok
 - Apache PDFBox and POI for reading resumes
+- RestClient and JsonPath for job boards; WireMock in tests
 
 ## Run locally
 
-1. Start MySQL 8 and create core-api's databases:
+1. Start MySQL 8 and create one database per service, plus one for its tests:
 
    ```sql
    CREATE DATABASE naukriradar_core;       -- development
    CREATE DATABASE naukriradar_core_test;  -- tests only
+   CREATE DATABASE naukriradar_job;
+   CREATE DATABASE naukriradar_job_test;
    ```
 
    Credentials default to `root` / `root`; override with `DB_USERNAME` and `DB_PASSWORD`.
@@ -45,6 +49,7 @@ client ──► gateway :8080 ──► core-api :8081 ──► MySQL naukrira
 
    ```bash
    ./gradlew :core-api:bootRun
+   ./gradlew :job-service:bootRun
    ./gradlew :gateway:bootRun
    ```
 
@@ -55,6 +60,7 @@ client ──► gateway :8080 ──► core-api :8081 ──► MySQL naukrira
 | Swagger UI (all services) | http://localhost:8080/swagger-ui.html |
 | Gateway health | http://localhost:8080/actuator/health |
 | core-api health | http://localhost:8081/actuator/health |
+| job-service health | http://localhost:8082/actuator/health |
 
 ## Try the API
 
@@ -79,6 +85,30 @@ The file type is checked from the file's bytes, not its name, so a renamed `.exe
 refused. Files are kept under `core-api/data/files` in dev
 (`naukriradar.storage.local-dir`).
 
+### Job boards
+
+A job board is a row, not code. Each source says where to call, which query params and
+headers to send, where the list of jobs is in the response (`resultsPath`) and where each
+field is (`fieldMappings`, as JsonPath). Arbeitnow is created on first start from
+`job-service/src/main/resources/sources/default-sources.json`.
+
+| Admin endpoint | What it does |
+|---|---|
+| `GET /api/v1/admin/job-sources` | All sources with last run status and job count |
+| `POST /api/v1/admin/job-sources` | Add a board (validated: URLs, JsonPaths, required fields) |
+| `PUT /api/v1/admin/job-sources/{id}` | Change a board's config |
+| `DELETE /api/v1/admin/job-sources/{id}` | Remove a board; its jobs stay |
+| `POST /api/v1/admin/job-sources/{id}/test` | Call the board and show what would be saved, without saving |
+| `POST /api/v1/admin/job-sources/{id}/fetch` | Fetch now and save |
+
+- API keys go in headers as `${setting:key}` and are read from `naukriradar.settings.key`
+  (env `NAUKRIRADAR_SETTINGS_KEY`), so they never sit in the database. Values typed in
+  literally are masked in responses.
+- A failing board is recorded on the source (`lastRunStatus: FAILED`) and switched off
+  after 5 failures in a row; it never fails the request.
+- Sources can't point at localhost or private networks unless
+  `naukriradar.jobs.allow-private-hosts` is on.
+
 Errors come back as [Problem Details](https://www.rfc-editor.org/rfc/rfc9457)
 (`application/problem+json`), with field errors under `errors`.
 
@@ -89,7 +119,8 @@ Errors come back as [Problem Details](https://www.rfc-editor.org/rfc/rfc9457)
 ./gradlew :core-api:test       # one service
 ```
 
-core-api's tests run against `naukriradar_core_test`, recreated on every run. The gateway's
+Each service tests against its own `*_test` database, recreated on every run. job-service
+uses WireMock in place of real job boards. The gateway's
 tests route to a fake service, so they need no database.
 
 ## Roadmap
@@ -98,4 +129,5 @@ tests route to a fake service, so they need no database.
 - [x] Phase 1: profile (users, profiles, skills)
 - [x] Microservices layout: gateway, core-api, shared library
 - [x] Phase 2: resume upload and skill extraction
-- [ ] Phase 3: job-service with the first job board
+- [x] Phase 3: job-service with the first job board (Arbeitnow)
+- [ ] Phase 4: fetch many boards in parallel, de-duplicate across boards, search

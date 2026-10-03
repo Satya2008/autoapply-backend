@@ -3,6 +3,7 @@ server:
 
 services:
   core-api: ${CORE_API_URL:http://localhost:8081}
+  job-service: ${JOB_SERVICE_URL:http://localhost:8082}
 
 spring:
   application:
@@ -16,11 +17,21 @@ spring:
               uri: ${services.core-api}
               predicates:
                 - Path=/api/v1/me/**,/api/v1/dev/**
+            - id: job-service
+              uri: ${services.job-service}
+              predicates:
+                - Path=/api/v1/admin/job-sources,/api/v1/admin/job-sources/**
             # Each service's OpenAPI document, so one Swagger UI here covers them all.
             - id: core-api-docs
               uri: ${services.core-api}
               predicates:
                 - Path=/docs/core-api
+              filters:
+                - SetPath=/v3/api-docs
+            - id: job-service-docs
+              uri: ${services.job-service}
+              predicates:
+                - Path=/docs/job-service
               filters:
                 - SetPath=/v3/api-docs
 
@@ -29,6 +40,8 @@ springdoc:
     urls:
       - name: core-api
         url: /docs/core-api
+      - name: job-service
+        url: /docs/job-service
 
 management:
   endpoints:
