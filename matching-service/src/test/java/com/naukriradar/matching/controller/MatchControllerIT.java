@@ -224,6 +224,23 @@ class MatchControllerIT {
 	}
 
 	@Test
+	void internalListGivesCoreApiTheBestMatchesAboveAScore() throws Exception {
+		String user = newUser();
+		stubProfile(user, profileJson(user, "[]"));
+		stubCandidates(jobsJson(perfectJob(), okJob()));
+		runToEnd(user);
+
+		mvc.perform(get("/internal/v1/users/" + user + "/matches"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$[*].jobId", contains("perfect", "ok")))
+				.andExpect(jsonPath("$[0].applyUrl").value("https://jobs.example.com/perfect"));
+		mvc.perform(get("/internal/v1/users/" + user + "/matches").param("minScore", "90"))
+				.andExpect(jsonPath("$[*].jobId", contains("perfect")));
+		mvc.perform(get("/internal/v1/users/" + user + "/matches").param("limit", "1000"))
+				.andExpect(status().isBadRequest());
+	}
+
+	@Test
 	void badRequestsAreRejected() throws Exception {
 		mvc.perform(get("/api/v1/me/matches")).andExpect(status().isUnauthorized());
 		mvc.perform(post("/api/v1/me/matches/runs").header(USER_HEADER, "not-a-uuid")).andExpect(status().isUnauthorized());

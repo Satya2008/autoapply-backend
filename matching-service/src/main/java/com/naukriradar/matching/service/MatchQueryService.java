@@ -4,6 +4,7 @@ import java.util.List;
 
 import com.naukriradar.common.exception.NotFoundException;
 import com.naukriradar.matching.dto.response.MatchDetailResponse;
+import com.naukriradar.matching.dto.response.MatchForApplyResponse;
 import com.naukriradar.matching.dto.response.MatchPageResponse;
 import com.naukriradar.matching.mapper.MatchMapper;
 import com.naukriradar.matching.model.JobMatch;
@@ -43,6 +44,15 @@ public class MatchQueryService {
 			next = new MatchCursor(last.getScore(), last.getId()).encode();
 		}
 		return new MatchPageResponse(items.stream().map(mapper::toSummary).toList(), next);
+	}
+
+	/** For core-api: the user's best matches at or above a score, best first. */
+	@Transactional(readOnly = true)
+	public List<MatchForApplyResponse> forApply(String userId, int minScore, int limit) {
+		return repository.firstPage(userId, minScore, PageRequest.of(0, limit)).stream()
+				.map(m -> new MatchForApplyResponse(m.getJobId(), m.getScore(), m.getJobTitle(), m.getJobCompany(),
+						m.getJobLocation(), m.getJobApplyUrl()))
+				.toList();
 	}
 
 	/** Another user's match is "not found", not "forbidden": its existence isn't revealed. */
