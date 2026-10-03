@@ -1,0 +1,16 @@
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/naukriradar_job_test
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:root}
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+
+naukriradar:
+  jobs:
+    # tests point sources at a local WireMock server
+    allow-private-hosts: true
+    disable-after-failures: 3
+  settings:
+    test-api-key: secret-123

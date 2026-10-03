@@ -1,0 +1,42 @@
+{
+  "data": [
+    {
+      "slug": "java-backend-developer-berlin-1",
+      "company_name": "Acme GmbH",
+      "title": "  Java Backend   Developer (m/w/d) ",
+      "description": "<p>Build <strong>Spring Boot</strong> services.</p><ul><li>Java 21</li><li>Kafka &amp; Redis</li></ul>",
+      "remote": false,
+      "url": "https://www.arbeitnow.com/jobs/acme/java-backend-developer-berlin-1",
+      "tags": ["IT"],
+      "job_types": ["full time"],
+      "location": "Berlin",
+      "created_at": 1790000000
+    },
+    {
+      "slug": "remote-platform-engineer-2",
+      "company_name": "Globex",
+      "title": "Platform Engineer",
+      "description": "Kubernetes and Terraform.",
+      "remote": true,
+      "url": "https://www.arbeitnow.com/jobs/globex/remote-platform-engineer-2",
+      "tags": [],
+      "job_types": [],
+      "location": "Remote",
+      "created_at": 1790500000
+    },
+    {
+      "slug": "no-link-3",
+      "company_name": "Initech",
+      "title": "Data Analyst",
+      "description": "SQL",
+      "remote": false,
+      "url": "javascript:alert(1)",
+      "tags": [],
+      "job_types": [],
+      "location": "Munich",
+      "created_at": 1790600000
+    }
+  ],
+  "links": { "next": "https://www.arbeitnow.com/api/job-board-api?page=2" },
+  "meta": { "current_page": 1 }
+}

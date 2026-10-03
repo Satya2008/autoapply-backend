@@ -1,0 +1,27 @@
+[
+  {
+    "code": "arbeitnow",
+    "name": "Arbeitnow",
+    "type": "REST_JSON",
+    "baseUrl": "https://www.arbeitnow.com",
+    "searchPath": "/api/job-board-api",
+    "method": "GET",
+    "headers": {},
+    "queryParams": { "page": "{page}" },
+    "resultsPath": "$.data",
+    "fieldMappings": {
+      "externalId": "$.slug",
+      "title": "$.title",
+      "company": "$.company_name",
+      "location": "$.location",
+      "remote": "$.remote",
+      "description": "$.description",
+      "applyUrl": "$.url",
+      "postedAt": "$.created_at"
+    },
+    "enabled": true,
+    "priority": 10,
+    "timeoutSeconds": 20,
+    "maxPages": 2
+  }
+]

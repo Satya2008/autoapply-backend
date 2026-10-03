@@ -1,0 +1,26 @@
+server:
+  port: 8082
+
+spring:
+  application:
+    name: job-service
+  profiles:
+    default: dev
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: update
+
+naukriradar:
+  jobs:
+    allow-private-hosts: false
+    max-response-size: 5MB
+    connect-timeout: 5s
+    disable-after-failures: 5
+    seed-defaults: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
