@@ -1,6 +1,7 @@
 spring:
   datasource:
-    url: jdbc:mysql://localhost:3306/naukriradar_job_test
+    # useAffectedRows: an UPDATE IGNORE that was skipped reports 0, not "1 row matched"
+    url: jdbc:mysql://localhost:3306/naukriradar_job_test?useAffectedRows=true
     username: ${DB_USERNAME:root}
     password: ${DB_PASSWORD:root}
   jpa:
@@ -12,5 +13,7 @@ naukriradar:
     # tests point sources at a local WireMock server
     allow-private-hosts: true
     disable-after-failures: 3
+    schedule:
+      enabled: false
   settings:
     test-api-key: secret-123

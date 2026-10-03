@@ -1,6 +1,5 @@
 package com.naukriradar.job.repository;
 
-import java.util.Collection;
 import java.util.List;
 
 import com.naukriradar.job.model.Job;
@@ -8,8 +7,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
 public interface JobRepository extends JpaRepository<Job, String> {
-
-	List<Job> findBySourceCodeAndExternalIdIn(String sourceCode, Collection<String> externalIds);
 
 	long countBySourceCode(String sourceCode);
 

@@ -11,8 +11,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.function.Function;
-import java.util.stream.Collectors;
+import java.util.concurrent.ThreadLocalRandom;
 
 import com.naukriradar.common.exception.ConflictException;
 import com.naukriradar.common.exception.NotFoundException;
@@ -22,7 +21,6 @@ import com.naukriradar.job.dto.response.FetchResultResponse;
 import com.naukriradar.job.dto.response.JobPreview;
 import com.naukriradar.job.exception.JobSourceFetchException;
 import com.naukriradar.job.mapper.JobMapper;
-import com.naukriradar.job.model.Job;
 import com.naukriradar.job.model.JobField;
 import com.naukriradar.job.model.JobSource;
 import com.naukriradar.job.model.RunStatus;
@@ -33,30 +31,34 @@ import com.naukriradar.job.normalizer.NormalizedJob;
 import com.naukriradar.job.provider.FetchRequest;
 import com.naukriradar.job.provider.JobSourceProvider;
 import com.naukriradar.job.provider.RawJob;
-import com.naukriradar.job.repository.JobRepository;
+import com.naukriradar.job.repository.JobBatchWriter;
+import com.naukriradar.job.repository.JobBatchWriter.FingerprintedJob;
+import com.naukriradar.job.repository.JobBatchWriter.WriteCounts;
 import com.naukriradar.job.repository.JobSourceRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * Runs a source: fetch every page, clean each item, then save new jobs and refresh known
- * ones. The HTTP calls happen outside any transaction so a slow board never holds a
- * database connection. A failing board is recorded on the source, never thrown at the caller.
+ * Runs one source: fetch every page, clean each item, then save. The HTTP calls happen
+ * outside any transaction so a slow board never holds a database connection. A failing
+ * board is recorded on the source and returned as FAILED, never thrown at the caller.
  */
 @Service
 public class JobIngestService {
 
 	private static final Logger log = LoggerFactory.getLogger(JobIngestService.class);
 
-	private static final int LOOKUP_BATCH = 500;
 	private static final int SAMPLE_SIZE = 10;
 	private static final int MAX_PROBLEMS = 20;
+	private static final int WRITE_ATTEMPTS = 3;
 
 	private final JobSourceRepository sourceRepository;
-	private final JobRepository jobRepository;
+	private final JobBatchWriter writer;
+	private final FingerprintService fingerprints;
 	private final Map<SourceType, JobSourceProvider> providers = new EnumMap<>(SourceType.class);
 	private final JobNormalizer normalizer;
 	private final JobMapper jobMapper;
@@ -65,11 +67,12 @@ public class JobIngestService {
 	private final TransactionTemplate transaction;
 	private final Clock clock;
 
-	public JobIngestService(JobSourceRepository sourceRepository, JobRepository jobRepository,
+	public JobIngestService(JobSourceRepository sourceRepository, JobBatchWriter writer, FingerprintService fingerprints,
 			List<JobSourceProvider> providers, JobNormalizer normalizer, JobMapper jobMapper, SourceRunLocks runLocks,
 			JobsProperties properties, PlatformTransactionManager transactionManager) {
 		this.sourceRepository = sourceRepository;
-		this.jobRepository = jobRepository;
+		this.writer = writer;
+		this.fingerprints = fingerprints;
 		providers.forEach(provider -> this.providers.put(provider.supports(), provider));
 		this.normalizer = normalizer;
 		this.jobMapper = jobMapper;
@@ -83,18 +86,23 @@ public class JobIngestService {
 	public FetchResultResponse fetch(String sourceId) {
 		JobSource source = loadForRun(sourceId);
 		if (!runLocks.tryAcquire(source.getId())) {
-			throw new ConflictException("A fetch for this source is already running.");
+			throw new ConflictException("A fetch for source " + source.getCode() + " is already running.");
 		}
 		Instant started = clock.instant();
 		try {
 			Collected collected = collect(source, started);
-			SaveCounts counts = transaction.execute(status -> save(source.getCode(), collected.jobs(), started));
+			List<FingerprintedJob> jobs = collected.jobs().stream()
+					.map(job -> new FingerprintedJob(job, fingerprints.fingerprint(job)))
+					.toList();
+			WriteCounts counts = writeWithRetry(source.getCode(), jobs, started);
 			String message = "Fetched " + collected.received() + " jobs: " + counts.inserted() + " new, "
-					+ counts.updated() + " updated, " + collected.skipped() + " skipped.";
+					+ counts.updated() + " updated, " + counts.duplicates() + " already listed by another board, "
+					+ collected.skipped() + " skipped.";
 			transaction.executeWithoutResult(status -> sourceRepository.findById(source.getId())
 					.ifPresent(s -> s.recordSuccess(clock.instant(), message)));
 			return new FetchResultResponse(source.getCode(), RunStatus.SUCCESS, collected.pages(), collected.received(),
-					counts.inserted(), counts.updated(), collected.skipped(), message, false, elapsed(started));
+					counts.inserted(), counts.updated(), counts.duplicates(), collected.skipped(), message, false,
+					elapsed(started));
 		}
 		catch (RuntimeException ex) {
 			String message = failureMessage(source, ex);
@@ -105,7 +113,7 @@ public class JobIngestService {
 				log.warn("Job source {} disabled after {} failed runs in a row", source.getCode(),
 						properties.disableAfterFailures());
 			}
-			return new FetchResultResponse(source.getCode(), RunStatus.FAILED, 0, 0, 0, 0, 0, message,
+			return new FetchResultResponse(source.getCode(), RunStatus.FAILED, 0, 0, 0, 0, 0, 0, message,
 					Boolean.TRUE.equals(disabled), elapsed(started));
 		}
 		finally {
@@ -149,6 +157,9 @@ public class JobIngestService {
 		Object previousFirstId = null;
 
 		for (int page = 1; page <= source.getMaxPages(); page++) {
+			if (Thread.currentThread().isInterrupted()) {
+				throw new JobSourceFetchException("Stopped: the run's time limit was reached.");
+			}
 			List<RawJob> items = provider.fetchPage(source, new FetchRequest("", page));
 			pages++;
 			if (items.isEmpty()) {
@@ -181,32 +192,34 @@ public class JobIngestService {
 		return new Collected(pages, received, skipped, jobs, problems);
 	}
 
-	private SaveCounts save(String sourceCode, List<NormalizedJob> jobs, Instant now) {
-		int inserted = 0;
-		int updated = 0;
-		for (int from = 0; from < jobs.size(); from += LOOKUP_BATCH) {
-			List<NormalizedJob> batch = jobs.subList(from, Math.min(from + LOOKUP_BATCH, jobs.size()));
-			Map<String, Job> existing = jobRepository
-					.findBySourceCodeAndExternalIdIn(sourceCode, batch.stream().map(NormalizedJob::externalId).toList())
-					.stream()
-					.collect(Collectors.toMap(job -> job.getExternalId().toLowerCase(Locale.ROOT), Function.identity(),
-							(a, b) -> a));
-			List<Job> fresh = new ArrayList<>();
-			for (NormalizedJob job : batch) {
-				Job known = existing.get(job.externalId().toLowerCase(Locale.ROOT));
-				if (known != null) {
-					jobMapper.refresh(known, job, now);
-					updated++;
-				}
-				else {
-					fresh.add(jobMapper.toNewJob(sourceCode, job, now));
-					inserted++;
-				}
+	/**
+	 * Sources run in parallel and can save the same posting at the same moment. Ordered writes
+	 * make a deadlock unlikely; if InnoDB still picks this transaction as the victim, the whole
+	 * write is safe to repeat, as MySQL itself suggests.
+	 */
+	private WriteCounts writeWithRetry(String sourceCode, List<FingerprintedJob> jobs, Instant now) {
+		for (int attempt = 1;; attempt++) {
+			try {
+				return writer.write(sourceCode, jobs, now);
 			}
-			jobRepository.saveAll(fresh);
+			catch (PessimisticLockingFailureException ex) {
+				if (attempt >= WRITE_ATTEMPTS) {
+					throw ex;
+				}
+				log.info("Lock conflict saving jobs for {}, retrying (attempt {})", sourceCode, attempt + 1);
+				pause(attempt);
+			}
 		}
-		jobRepository.flush();
-		return new SaveCounts(inserted, updated);
+	}
+
+	private static void pause(int attempt) {
+		try {
+			Thread.sleep(50L * attempt + ThreadLocalRandom.current().nextInt(50));
+		}
+		catch (InterruptedException ex) {
+			Thread.currentThread().interrupt();
+			throw new JobSourceFetchException("Stopped while retrying the save.", ex);
+		}
 	}
 
 	private static String failureMessage(JobSource source, RuntimeException ex) {
@@ -228,9 +241,6 @@ public class JobIngestService {
 	}
 
 	private record Collected(int pages, int received, int skipped, List<NormalizedJob> jobs, List<String> problems) {
-	}
-
-	private record SaveCounts(int inserted, int updated) {
 	}
 
 }

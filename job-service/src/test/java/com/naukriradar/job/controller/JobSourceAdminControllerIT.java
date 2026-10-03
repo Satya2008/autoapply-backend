@@ -3,6 +3,7 @@ package com.naukriradar.job.controller;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
+import java.util.regex.Matcher;
 
 import com.github.tomakehurst.wiremock.client.WireMock;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
@@ -127,7 +128,7 @@ class JobSourceAdminControllerIT {
 	@Test
 	void boardThatIgnoresThePageParameterIsNotReadForever() throws Exception {
 		String path = "/" + uniqueCode();
-		board.stubFor(WireMock.get(urlPathEqualTo(path)).willReturn(okJson(fixture())));
+		board.stubFor(WireMock.get(urlPathEqualTo(path)).willReturn(okJson(fixture(path))));
 		String id = idOf(create(uniqueCode(), path, 5, "{}"));
 
 		fetch(id)
@@ -204,7 +205,7 @@ class JobSourceAdminControllerIT {
 	}
 
 	private void stubPages(String path) throws IOException {
-		board.stubFor(WireMock.get(urlPathEqualTo(path)).withQueryParam("page", equalTo("1")).willReturn(okJson(fixture())));
+		board.stubFor(WireMock.get(urlPathEqualTo(path)).withQueryParam("page", equalTo("1")).willReturn(okJson(fixture(path))));
 		board.stubFor(WireMock.get(urlPathEqualTo(path)).withQueryParam("page", equalTo("2")).willReturn(okJson("{\"data\": []}")));
 	}
 
@@ -259,8 +260,13 @@ class JobSourceAdminControllerIT {
 		return "t-" + UUID.randomUUID().toString().substring(0, 8);
 	}
 
-	private static String fixture() throws IOException {
-		return new ClassPathResource("boards/arbeitnow-page1.json").getContentAsString(StandardCharsets.UTF_8);
+	/**
+	 * The sample page with company names tagged per test. Jobs are de-duplicated by fingerprint
+	 * across the whole table, so every test needs postings no other test has stored.
+	 */
+	private static String fixture(String tag) throws IOException {
+		return new ClassPathResource("boards/arbeitnow-page1.json").getContentAsString(StandardCharsets.UTF_8)
+				.replaceAll("(\"company_name\": \")([^\"]+)\"", "$1$2 " + Matcher.quoteReplacement(tag) + "\"");
 	}
 
 }

@@ -15,28 +15,39 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.annotations.UuidGenerator;
 import org.hibernate.type.SqlTypes;
 
+/**
+ * A stored posting. Rows are written in bulk by {@code JobBatchWriter} with plain JDBC, so
+ * the database constraints, not Java checks, decide what counts as a duplicate. The
+ * FULLTEXT index on title, company and description is created by {@code SchemaExtras}.
+ */
 @Entity
 @Table(name = "jobs",
-		uniqueConstraints = @UniqueConstraint(name = "uk_jobs_source_external", columnNames = { "source_code", "external_id" }),
-		indexes = @Index(name = "idx_jobs_posted_at", columnList = "posted_at"))
+		uniqueConstraints = {
+				@UniqueConstraint(name = "uk_jobs_source_external", columnNames = { "source_code", "external_id" }),
+				@UniqueConstraint(name = "uk_jobs_fingerprint", columnNames = "fingerprint") },
+		indexes = {
+				@Index(name = "idx_jobs_status_sort", columnList = "status, sort_at, id"),
+				@Index(name = "idx_jobs_last_seen", columnList = "last_seen_at") })
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Job {
 
 	@Id
-	@UuidGenerator(style = UuidGenerator.Style.VERSION_7)
 	@Column(length = 36)
 	private String id;
 
 	@Column(name = "source_code", nullable = false, length = 40, updatable = false)
 	private String sourceCode;
 
-	/** The board's own id for the posting; together with sourceCode it identifies the job. */
+	/** The board's own id for the posting; with sourceCode it identifies the job on that board. */
 	@Column(name = "external_id", nullable = false, length = 200, updatable = false)
 	private String externalId;
+
+	/** Hash of normalised title, company and city; the same job on two boards gets the same value. */
+	@Column(nullable = false, length = 64)
+	private String fingerprint;
 
 	@Column(nullable = false, length = 300)
 	private String title;
@@ -59,6 +70,10 @@ public class Job {
 	@Column(name = "posted_at")
 	private Instant postedAt;
 
+	/** postedAt, or fetchedAt when the board gave no date. Never null, so it can drive paging. */
+	@Column(name = "sort_at", nullable = false)
+	private Instant sortAt;
+
 	@Column(nullable = false, length = 1000)
 	private String applyUrl;
 
@@ -68,44 +83,17 @@ public class Job {
 	@Enumerated(EnumType.STRING)
 	@JdbcTypeCode(SqlTypes.VARCHAR)
 	@Column(nullable = false, length = 10)
-	private JobStatus status = JobStatus.ACTIVE;
+	private JobStatus status;
 
 	/** When we first saw the posting. */
 	@Column(nullable = false, updatable = false)
 	private Instant fetchedAt;
 
 	/** When a fetch last returned it. */
-	@Column(nullable = false)
+	@Column(name = "last_seen_at", nullable = false)
 	private Instant lastSeenAt;
 
 	@Version
 	private long version;
-
-	public Job(String sourceCode, String externalId, Instant fetchedAt) {
-		this.sourceCode = sourceCode;
-		this.externalId = externalId;
-		this.fetchedAt = fetchedAt;
-		this.lastSeenAt = fetchedAt;
-	}
-
-	/** Copies the latest values from the board. A job seen again is active again. */
-	public void refresh(String title, String company, String location, boolean remote, Long salaryMin,
-			Long salaryMax, String currency, Instant postedAt, String applyUrl, String description, Instant seenAt) {
-		this.title = title;
-		this.company = company;
-		this.location = location;
-		this.remote = remote;
-		this.salaryMin = salaryMin;
-		this.salaryMax = salaryMax;
-		this.currency = currency;
-		// keep the first known posting date if the board stops sending one
-		if (postedAt != null) {
-			this.postedAt = postedAt;
-		}
-		this.applyUrl = applyUrl;
-		this.description = description;
-		this.status = JobStatus.ACTIVE;
-		this.lastSeenAt = seenAt;
-	}
 
 }
