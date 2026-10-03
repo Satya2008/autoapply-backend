@@ -57,6 +57,11 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 		return problem(HttpStatus.UNAUTHORIZED, "Unauthenticated", ex.getMessage());
 	}
 
+	@ExceptionHandler(ServiceUnavailableException.class)
+	ProblemDetail handleUnavailable(ServiceUnavailableException ex) {
+		return problem(HttpStatus.SERVICE_UNAVAILABLE, "Service unavailable", ex.getMessage());
+	}
+
 	@ExceptionHandler(OptimisticLockingFailureException.class)
 	ProblemDetail handleOptimisticLock(OptimisticLockingFailureException ex) {
 		return problem(HttpStatus.CONFLICT, "Concurrent update",

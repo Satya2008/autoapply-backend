@@ -26,6 +26,8 @@ class GatewayRoutingTests {
 
 	private static final HttpServer jobService = startFakeService("job-service");
 
+	private static final HttpServer matchingService = startFakeService("matching-service");
+
 	private final HttpClient client = HttpClient.newHttpClient();
 
 	@LocalServerPort
@@ -35,12 +37,14 @@ class GatewayRoutingTests {
 	static void routeToFake(DynamicPropertyRegistry registry) {
 		registry.add("services.core-api", () -> "http://localhost:" + coreApi.getAddress().getPort());
 		registry.add("services.job-service", () -> "http://localhost:" + jobService.getAddress().getPort());
+		registry.add("services.matching-service", () -> "http://localhost:" + matchingService.getAddress().getPort());
 	}
 
 	@AfterAll
 	static void stopFake() {
 		coreApi.stop(0);
 		jobService.stop(0);
+		matchingService.stop(0);
 	}
 
 	@Test
@@ -81,6 +85,28 @@ class GatewayRoutingTests {
 		assertThat(search.body()).isEqualTo("job-service saw GET /api/v1/jobs as null");
 		assertThat(detail.body()).isEqualTo("job-service saw GET /api/v1/jobs/abc as null");
 		assertThat(runs.body()).isEqualTo("job-service saw POST /api/v1/admin/jobs/fetch-runs as null");
+	}
+
+	@Test
+	void matchesGoToMatchingServiceEvenThoughTheyAreUnderMe() throws Exception {
+		String user = "22222222-2222-2222-2222-222222222222";
+		HttpResponse<String> list = send(HttpRequest.newBuilder(uri("/api/v1/me/matches")).header("X-User-Id", user));
+		HttpResponse<String> run = send(HttpRequest.newBuilder(uri("/api/v1/me/matches/runs")).header("X-User-Id", user)
+				.POST(HttpRequest.BodyPublishers.noBody()));
+		HttpResponse<String> profile = send(HttpRequest.newBuilder(uri("/api/v1/me/profile")).header("X-User-Id", user));
+		HttpResponse<String> docs = send(HttpRequest.newBuilder(uri("/docs/matching-service")));
+
+		assertThat(list.body()).isEqualTo("matching-service saw GET /api/v1/me/matches as " + user);
+		assertThat(run.body()).isEqualTo("matching-service saw POST /api/v1/me/matches/runs as " + user);
+		assertThat(profile.body()).startsWith("core-api saw GET /api/v1/me/profile");
+		assertThat(docs.body()).isEqualTo("matching-service saw GET /v3/api-docs as null");
+	}
+
+	@Test
+	void internalEndpointsAreNotExposed() throws Exception {
+		assertThat(send(HttpRequest.newBuilder(uri("/internal/v1/users/x/matching-profile"))).statusCode()).isEqualTo(404);
+		assertThat(send(HttpRequest.newBuilder(uri("/internal/v1/jobs/candidates"))
+				.POST(HttpRequest.BodyPublishers.noBody())).statusCode()).isEqualTo(404);
 	}
 
 	@Test

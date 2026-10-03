@@ -10,8 +10,10 @@ Microservices from the start, each in its own Gradle module with its own databas
 one repository.
 
 ```
-client ──► gateway :8080 ─┬─► core-api    :8081 ──► MySQL naukriradar_core
-                          └─► job-service :8082 ──► MySQL naukriradar_job ──► job boards
+client ──► gateway :8080 ─┬─► core-api         :8081 ──► MySQL naukriradar_core
+                          ├─► job-service      :8082 ──► MySQL naukriradar_job ──► job boards
+                          └─► matching-service :8083 ──► MySQL naukriradar_matching
+                                (calls core-api and job-service on /internal APIs)
 ```
 
 | Module | Port | What it owns | Status |
@@ -19,7 +21,7 @@ client ──► gateway :8080 ─┬─► core-api    :8081 ──► MySQL na
 | `gateway` | 8080 | The only public entry point. Routes requests, and serves one Swagger UI for all services | ✅ |
 | `core-api` | 8081 | Users, profiles, skills, resumes; later applications | ✅ |
 | `job-service` | 8082 | Job boards as configuration; fetching, cleaning and storing jobs | ✅ |
-| `matching-service` | 8083 | Scoring jobs against profiles | Phase 5 |
+| `matching-service` | 8083 | Scoring jobs against a profile, keeping the best matches | ✅ |
 | `apply-worker` | 8084 | Browser automation for low-risk portals | Phase 15 |
 | `notification-service` | 8085 | Email, Telegram, daily digest | Phase 16 |
 | `libs/common-web` | — | Shared Problem Details errors and the `X-User-Id` caller lookup | ✅ |
@@ -42,6 +44,8 @@ client ──► gateway :8080 ─┬─► core-api    :8081 ──► MySQL na
    CREATE DATABASE naukriradar_core_test;  -- tests only
    CREATE DATABASE naukriradar_job;
    CREATE DATABASE naukriradar_job_test;
+   CREATE DATABASE naukriradar_matching;
+   CREATE DATABASE naukriradar_matching_test;
    ```
 
    Credentials default to `root` / `root`; override with `DB_USERNAME` and `DB_PASSWORD`.
@@ -51,6 +55,7 @@ client ──► gateway :8080 ─┬─► core-api    :8081 ──► MySQL na
    ```bash
    ./gradlew :core-api:bootRun
    ./gradlew :job-service:bootRun
+   ./gradlew :matching-service:bootRun
    ./gradlew :gateway:bootRun
    ```
 
@@ -62,6 +67,7 @@ client ──► gateway :8080 ─┬─► core-api    :8081 ──► MySQL na
 | Gateway health | http://localhost:8080/actuator/health |
 | core-api health | http://localhost:8081/actuator/health |
 | job-service health | http://localhost:8082/actuator/health |
+| matching-service health | http://localhost:8083/actuator/health |
 
 ## Try the API
 
@@ -130,6 +136,34 @@ field is (`fieldMappings`, as JsonPath). Arbeitnow is created on first start fro
   which FULLTEXT can't index, fall back to a whole-word match on the title.
 - Paging is keyset: pass the `nextCursor` you got back.
 
+### Matching
+
+| Endpoint | What it does |
+|---|---|
+| `POST /api/v1/me/matches/runs` | Score fresh jobs for you; returns **202**, or 409 if a run is already going |
+| `GET /api/v1/me/matches/runs/{id}` | Run status and counts |
+| `GET /api/v1/me/matches?minScore=&limit=&cursor=` | Your matches, best first |
+| `GET /api/v1/me/matches/{id}` | One match with the reason behind each part of its score |
+
+A run takes your profile from core-api, asks job-service for the ~300 most relevant jobs
+(FULLTEXT on your skills and target roles), drops excluded companies and keywords, and
+scores each job 0-100 from six factors:
+
+| Factor | Default weight | Scores |
+|---|---|---|
+| skills | 35 | your skills the posting mentions (whole words: `java` isn't found in `javascript`) |
+| title | 25 | how close the title is to a target role, ignoring "Senior", "(m/w/d)" and so on |
+| location | 15 | one of your cities, or remote if you're open to it |
+| salary | 10 | whether the top of the range reaches your expectation (INR only) |
+| experience | 10 | your years against "3-5 years", "5+ yrs" or the title's seniority |
+| recency | 5 | newer postings first |
+
+Missing data scores 0.5 ("can't tell") instead of 0. Weights are configuration
+(`naukriradar.matching.weights.*`) and are checked at startup. Matches under 20 aren't
+kept. Running again refreshes scores instead of adding rows. Runs use a bounded pool of
+two workers; when it's full the API answers 503. Scoring 5,000 postings takes about 0.8 s
+on a 4 GB laptop.
+
 Errors come back as [Problem Details](https://www.rfc-editor.org/rfc/rfc9457)
 (`application/problem+json`), with field errors under `errors`.
 
@@ -152,4 +186,5 @@ tests route to a fake service, so they need no database.
 - [x] Phase 2: resume upload and skill extraction
 - [x] Phase 3: job-service with the first job board (Arbeitnow)
 - [x] Phase 4: fetch many boards in parallel, de-duplicate across boards, search
-- [ ] Phase 5: matching-service, scoring jobs against a profile
+- [x] Phase 5: matching-service, scoring jobs against a profile
+- [ ] Phase 6: applications, with risk checks and a "needs your click" queue

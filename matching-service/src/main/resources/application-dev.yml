@@ -1,0 +1,6 @@
+spring:
+  datasource:
+    # useAffectedRows: an upsert reports 1 for a new match and 2 for a refreshed one
+    url: jdbc:mysql://localhost:3306/naukriradar_matching?useAffectedRows=true
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:root}

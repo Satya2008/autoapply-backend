@@ -1,0 +1,42 @@
+server:
+  port: 8083
+
+spring:
+  application:
+    name: matching-service
+  profiles:
+    default: dev
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: update
+    properties:
+      # matches are also written with plain JDBC in UTC; keep Hibernate on the same clock
+      hibernate.jdbc.time_zone: UTC
+
+naukriradar:
+  services:
+    core-api-url: ${CORE_API_URL:http://localhost:8081}
+    job-service-url: ${JOB_SERVICE_URL:http://localhost:8082}
+    connect-timeout: 3s
+    read-timeout: 15s
+  matching:
+    # Relative importance of each factor; they don't need to add up to 100.
+    weights:
+      skills: 35
+      title: 25
+      location: 15
+      salary: 10
+      experience: 10
+      recency: 5
+    min-store-score: 20
+    candidate-limit: 300
+    candidate-days: 60
+    worker-threads: 2
+    queue-capacity: 20
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health

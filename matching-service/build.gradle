@@ -1,0 +1,17 @@
+plugins {
+	id 'org.springframework.boot'
+}
+
+description = 'matching-service: scores jobs against a candidate profile'
+
+dependencies {
+	implementation project(':libs:common-web')
+	implementation 'org.springframework.boot:spring-boot-starter-actuator'
+	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+	implementation 'org.springframework.boot:spring-boot-starter-restclient'
+	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.1.1'
+	runtimeOnly 'com.mysql:mysql-connector-j'
+	testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
+	testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
+	testImplementation 'org.wiremock:wiremock-standalone:3.13.2'
+}

@@ -31,5 +31,5 @@ jobs:
           java-version: 21
       - uses: gradle/actions/setup-gradle@v5
       # one test database per service; the container only creates the first
-      - run: mysql -h 127.0.0.1 -uroot -proot -e "CREATE DATABASE IF NOT EXISTS naukriradar_job_test"
+      - run: mysql -h 127.0.0.1 -uroot -proot -e "CREATE DATABASE IF NOT EXISTS naukriradar_job_test; CREATE DATABASE IF NOT EXISTS naukriradar_matching_test"
       - run: ./gradlew build

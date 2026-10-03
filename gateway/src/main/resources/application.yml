@@ -4,6 +4,7 @@ server:
 services:
   core-api: ${CORE_API_URL:http://localhost:8081}
   job-service: ${JOB_SERVICE_URL:http://localhost:8082}
+  matching-service: ${MATCHING_SERVICE_URL:http://localhost:8083}
 
 spring:
   application:
@@ -13,6 +14,11 @@ spring:
       server:
         webflux:
           routes:
+            # before core-api: its /api/v1/me/** would otherwise take /api/v1/me/matches too
+            - id: matching-service
+              uri: ${services.matching-service}
+              predicates:
+                - Path=/api/v1/me/matches,/api/v1/me/matches/**
             - id: core-api
               uri: ${services.core-api}
               predicates:
@@ -34,6 +40,12 @@ spring:
                 - Path=/docs/job-service
               filters:
                 - SetPath=/v3/api-docs
+            - id: matching-service-docs
+              uri: ${services.matching-service}
+              predicates:
+                - Path=/docs/matching-service
+              filters:
+                - SetPath=/v3/api-docs
 
 springdoc:
   swagger-ui:
@@ -42,6 +54,8 @@ springdoc:
         url: /docs/core-api
       - name: job-service
         url: /docs/job-service
+      - name: matching-service
+        url: /docs/matching-service
 
 management:
   endpoints:
