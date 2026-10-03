@@ -2,7 +2,7 @@ package com.naukriradar.core.config;
 
 import java.util.List;
 
-import com.naukriradar.common.web.CurrentUserProvider;
+import com.naukriradar.common.security.CurrentUserProvider;
 import io.swagger.v3.oas.models.Components;
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Info;
@@ -14,7 +14,7 @@ import org.springframework.context.annotation.Configuration;
 
 /** Swagger metadata, plus an Authorize box for the {@code X-User-Id} header. */
 @Configuration
-class OpenApiConfig {
+public class OpenApiConfig {
 
 	private static final String USER_ID_SCHEME = "userId";
 
@@ -27,7 +27,7 @@ class OpenApiConfig {
 				.description("Dev only: the id returned by POST /api/v1/dev/users.");
 		return new OpenAPI()
 				.info(new Info().title("core-api").version("v1")
-						.description("Users, profiles and skills."))
+						.description("Users, profiles, skills and resumes."))
 				// Relative, so "Try it out" calls whichever host served the docs: the gateway
 				// when viewed there, this service when viewed directly.
 				.servers(List.of(new Server().url("/")))
