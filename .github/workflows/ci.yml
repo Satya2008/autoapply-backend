@@ -14,7 +14,7 @@ jobs:
         image: mysql:8.4
         env:
           MYSQL_ROOT_PASSWORD: root
-          MYSQL_DATABASE: naukriradar_test
+          MYSQL_DATABASE: naukriradar_core_test
         ports:
           - 3306:3306
         options: >-

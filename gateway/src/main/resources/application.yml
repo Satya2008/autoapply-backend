@@ -1,0 +1,37 @@
+server:
+  port: 8080
+
+services:
+  core-api: ${CORE_API_URL:http://localhost:8081}
+
+spring:
+  application:
+    name: gateway
+  cloud:
+    gateway:
+      server:
+        webflux:
+          routes:
+            - id: core-api
+              uri: ${services.core-api}
+              predicates:
+                - Path=/api/v1/me/**,/api/v1/dev/**
+            # Each service's OpenAPI document, so one Swagger UI here covers them all.
+            - id: core-api-docs
+              uri: ${services.core-api}
+              predicates:
+                - Path=/docs/core-api
+              filters:
+                - SetPath=/v3/api-docs
+
+springdoc:
+  swagger-ui:
+    urls:
+      - name: core-api
+        url: /docs/core-api
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health

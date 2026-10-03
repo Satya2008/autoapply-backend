@@ -1,7 +1,0 @@
-spring:
-  datasource:
-    url: jdbc:mysql://localhost:3306/naukriradar
-    username: ${DB_USERNAME:root}
-    password: ${DB_PASSWORD:root}
-  jpa:
-    show-sql: true

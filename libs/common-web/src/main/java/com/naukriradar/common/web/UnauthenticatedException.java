@@ -1,0 +1,10 @@
+package com.naukriradar.common.web;
+
+/** The caller could not be identified. Mapped to 401. */
+public class UnauthenticatedException extends RuntimeException {
+
+	public UnauthenticatedException(String message) {
+		super(message);
+	}
+
+}
