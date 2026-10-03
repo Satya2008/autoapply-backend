@@ -103,10 +103,22 @@ class GatewayRoutingTests {
 	}
 
 	@Test
+	void applicationsAndPortalsGoToCoreApi() throws Exception {
+		String user = "33333333-3333-3333-3333-333333333333";
+		HttpResponse<String> runs = send(HttpRequest.newBuilder(uri("/api/v1/me/applications/runs")).header("X-User-Id", user)
+				.POST(HttpRequest.BodyPublishers.noBody()));
+		HttpResponse<String> portals = send(HttpRequest.newBuilder(uri("/api/v1/admin/portals")));
+
+		assertThat(runs.body()).isEqualTo("core-api saw POST /api/v1/me/applications/runs as " + user);
+		assertThat(portals.body()).isEqualTo("core-api saw GET /api/v1/admin/portals as null");
+	}
+
+	@Test
 	void internalEndpointsAreNotExposed() throws Exception {
 		assertThat(send(HttpRequest.newBuilder(uri("/internal/v1/users/x/matching-profile"))).statusCode()).isEqualTo(404);
 		assertThat(send(HttpRequest.newBuilder(uri("/internal/v1/jobs/candidates"))
 				.POST(HttpRequest.BodyPublishers.noBody())).statusCode()).isEqualTo(404);
+		assertThat(send(HttpRequest.newBuilder(uri("/internal/v1/users/x/matches"))).statusCode()).isEqualTo(404);
 	}
 
 	@Test

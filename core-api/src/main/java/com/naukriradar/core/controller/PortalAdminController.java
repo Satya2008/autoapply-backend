@@ -1,0 +1,58 @@
+package com.naukriradar.core.controller;
+
+import java.util.List;
+
+import com.naukriradar.core.dto.request.PortalConfigRequest;
+import com.naukriradar.core.dto.response.PortalConfigResponse;
+import com.naukriradar.core.service.PortalConfigService;
+import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.bind.annotation.RestController;
+
+/** Apply portals: risk overrides now, browser selectors in Phase 15. Admin-only from Phase 8. */
+@RestController
+@RequestMapping("/api/v1/admin/portals")
+public class PortalAdminController {
+
+	private final PortalConfigService service;
+
+	public PortalAdminController(PortalConfigService service) {
+		this.service = service;
+	}
+
+	@GetMapping
+	public List<PortalConfigResponse> list() {
+		return service.list();
+	}
+
+	@GetMapping("/{id}")
+	public PortalConfigResponse get(@PathVariable String id) {
+		return service.get(id);
+	}
+
+	@PostMapping
+	@ResponseStatus(HttpStatus.CREATED)
+	public PortalConfigResponse create(@Valid @RequestBody PortalConfigRequest request) {
+		return service.create(request);
+	}
+
+	@PutMapping("/{id}")
+	public PortalConfigResponse update(@PathVariable String id, @Valid @RequestBody PortalConfigRequest request) {
+		return service.update(id, request);
+	}
+
+	@DeleteMapping("/{id}")
+	@ResponseStatus(HttpStatus.NO_CONTENT)
+	public void delete(@PathVariable String id) {
+		service.delete(id);
+	}
+
+}

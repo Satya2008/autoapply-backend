@@ -10,3 +10,7 @@ spring:
 naukriradar:
   storage:
     local-dir: build/test-files
+  services:
+    # ApplicationControllerIT runs WireMock on this port in place of matching-service. A fixed
+    # port keeps one Spring context for every integration test.
+    matching-service-url: http://localhost:18083

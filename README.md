@@ -19,7 +19,7 @@ client ──► gateway :8080 ─┬─► core-api         :8081 ──► MyS
 | Module | Port | What it owns | Status |
 |---|---|---|---|
 | `gateway` | 8080 | The only public entry point. Routes requests, and serves one Swagger UI for all services | ✅ |
-| `core-api` | 8081 | Users, profiles, skills, resumes; later applications | ✅ |
+| `core-api` | 8081 | Users, profiles, skills, resumes, applications | ✅ |
 | `job-service` | 8082 | Job boards as configuration; fetching, cleaning and storing jobs | ✅ |
 | `matching-service` | 8083 | Scoring jobs against a profile, keeping the best matches | ✅ |
 | `apply-worker` | 8084 | Browser automation for low-risk portals | Phase 15 |
@@ -164,6 +164,34 @@ kept. Running again refreshes scores instead of adding rows. Runs use a bounded 
 two workers; when it's full the API answers 503. Scoring 5,000 postings takes about 0.8 s
 on a 4 GB laptop.
 
+### Applications
+
+| Endpoint | What it does |
+|---|---|
+| `POST /api/v1/me/applications/runs` | Turn your matches into applications; **202**, or 409 if a run is going |
+| `GET /api/v1/me/applications/runs/{id}` | Run status and counts |
+| `GET /api/v1/me/applications?status=&limit=&cursor=` | Your applications, newest first |
+| `GET /api/v1/me/applications/needs-you` | The ones to send yourself, with answers ready to copy |
+| `GET /api/v1/me/applications/{id}` | One application with its full timeline |
+| `POST /api/v1/me/applications/{id}/done` | You applied yourself (safe to repeat) |
+| `POST /api/v1/me/applications/{id}/skip` | Not applying (safe to repeat) |
+| `PATCH /api/v1/me/applications/{id}/status` | Report INTERVIEW, OFFER or REJECTED |
+| `GET /api/v1/me/applications/stats` | Counts per status, sent, today's automatic count |
+| `GET/POST/PUT/DELETE /api/v1/admin/portals` | Per-site risk overrides (and browser selectors later) |
+
+Each match at or above your minimum score becomes an application, routed by the risk of
+its apply link:
+
+- **HIGH** (LinkedIn, Naukri, Indeed, Workday and others that ban bots) and **MEDIUM**
+  (unknown sites): never automated. They wait in "needs you" with your answers prepared.
+- **LOW** (Greenhouse, Lever, Workable and other applicant tracking systems): sent by the
+  apply engine, if auto apply is on and today's limit has room.
+
+The engine runs in **simulate mode**: it records the application and sends nothing.
+Statuses follow a fixed set of moves (SKIPPED can never become OFFER), and every move is
+kept in the timeline. Planning locks the profile row, so two runs for the same user can't
+apply to a job twice.
+
 Errors come back as [Problem Details](https://www.rfc-editor.org/rfc/rfc9457)
 (`application/problem+json`), with field errors under `errors`.
 
@@ -187,4 +215,5 @@ tests route to a fake service, so they need no database.
 - [x] Phase 3: job-service with the first job board (Arbeitnow)
 - [x] Phase 4: fetch many boards in parallel, de-duplicate across boards, search
 - [x] Phase 5: matching-service, scoring jobs against a profile
-- [ ] Phase 6: applications, with risk checks and a "needs your click" queue
+- [x] Phase 6: applications, with risk checks and a "needs your click" queue (simulate mode)
+- [ ] Phase 7: runtime settings and audit log

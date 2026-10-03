@@ -22,7 +22,7 @@ spring:
             - id: core-api
               uri: ${services.core-api}
               predicates:
-                - Path=/api/v1/me/**,/api/v1/dev/**
+                - Path=/api/v1/me/**,/api/v1/dev/**,/api/v1/admin/portals,/api/v1/admin/portals/**
             - id: job-service
               uri: ${services.job-service}
               predicates:
