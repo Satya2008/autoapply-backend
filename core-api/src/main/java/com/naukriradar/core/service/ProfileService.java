@@ -13,6 +13,7 @@ import com.naukriradar.common.exception.NotFoundException;
 import com.naukriradar.core.dto.request.ReplaceSkillsRequest;
 import com.naukriradar.core.dto.request.SkillRequest;
 import com.naukriradar.core.dto.request.UpdateProfileRequest;
+import com.naukriradar.core.dto.response.MatchingProfileResponse;
 import com.naukriradar.core.dto.response.ProfileResponse;
 import com.naukriradar.core.dto.response.SkillResponse;
 import com.naukriradar.core.mapper.ProfileMapper;
@@ -52,6 +53,12 @@ public class ProfileService {
 		checkAutoApplyPrerequisites(profile);
 		// flush so the response has the new updatedAt and version
 		return mapper.toResponse(profileRepository.saveAndFlush(profile));
+	}
+
+	/** For other services; the user id comes from the caller, not from a request header. */
+	@Transactional(readOnly = true)
+	public MatchingProfileResponse getMatchingProfile(String userId) {
+		return mapper.toMatchingProfile(load(userId));
 	}
 
 	@Transactional(readOnly = true)

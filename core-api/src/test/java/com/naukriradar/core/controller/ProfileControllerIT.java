@@ -153,6 +153,32 @@ class ProfileControllerIT {
 				.andExpect(jsonPath("$.status").value(404));
 	}
 
+	@Test
+	void internalMatchingProfileHasOnlyWhatMatchingNeeds() throws Exception {
+		String userId = createUser();
+		mvc.perform(put("/api/v1/me/profile").header(USER_HEADER, userId)
+				.contentType(MediaType.APPLICATION_JSON).content(VALID_PROFILE))
+				.andExpect(status().isOk());
+		mvc.perform(put("/api/v1/me/skills").header(USER_HEADER, userId)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"skills\": [{\"name\": \"Kafka\"}, {\"name\": \"Java\", \"years\": 3}]}"))
+				.andExpect(status().isOk());
+
+		mvc.perform(get("/internal/v1/users/" + userId + "/matching-profile"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.userId").value(userId))
+				.andExpect(jsonPath("$.skills", contains("java", "kafka")))
+				.andExpect(jsonPath("$.targetRoles", contains("Backend Engineer")))
+				.andExpect(jsonPath("$.excludedCompanies", contains("acme corp")))
+				.andExpect(jsonPath("$.expectedSalary").value(900000))
+				.andExpect(jsonPath("$.minMatchScore").value(60))
+				.andExpect(jsonPath("$.phone").doesNotExist())
+				.andExpect(jsonPath("$.fullName").doesNotExist());
+
+		mvc.perform(get("/internal/v1/users/" + UUID.randomUUID() + "/matching-profile"))
+				.andExpect(status().isNotFound());
+	}
+
 	private String createUser() throws Exception {
 		return createUser(uniqueEmail());
 	}

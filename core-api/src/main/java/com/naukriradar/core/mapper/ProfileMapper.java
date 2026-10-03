@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Map;
 
 import com.naukriradar.core.dto.request.UpdateProfileRequest;
+import com.naukriradar.core.dto.response.MatchingProfileResponse;
 import com.naukriradar.core.dto.response.ProfileResponse;
 import com.naukriradar.core.dto.response.SkillResponse;
 import com.naukriradar.core.dto.response.UserResponse;
@@ -42,6 +43,20 @@ public class ProfileMapper {
 				profile.getDailyApplyLimit(),
 				profile.isAutoApplyEnabled(),
 				profile.getUpdatedAt());
+	}
+
+	public MatchingProfileResponse toMatchingProfile(Profile profile) {
+		return new MatchingProfileResponse(
+				profile.getUserId(),
+				profile.getSkills().keySet().stream().sorted().toList(),
+				sorted(profile.getTargetRoles()),
+				sorted(profile.getPreferredLocations()),
+				profile.isRemoteOk(),
+				profile.getExpectedSalary(),
+				profile.getExperienceYears(),
+				sorted(profile.getExcludedCompanies()),
+				sorted(profile.getExcludedKeywords()),
+				profile.getMinMatchScore());
 	}
 
 	public List<SkillResponse> toResponse(Map<String, ProfileSkill> skills) {
