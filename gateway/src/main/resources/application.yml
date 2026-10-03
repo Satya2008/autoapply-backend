@@ -20,7 +20,7 @@ spring:
             - id: job-service
               uri: ${services.job-service}
               predicates:
-                - Path=/api/v1/admin/job-sources,/api/v1/admin/job-sources/**
+                - Path=/api/v1/admin/job-sources,/api/v1/admin/job-sources/**,/api/v1/admin/jobs/**,/api/v1/jobs,/api/v1/jobs/**
             # Each service's OpenAPI document, so one Swagger UI here covers them all.
             - id: core-api-docs
               uri: ${services.core-api}

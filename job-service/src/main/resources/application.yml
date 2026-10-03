@@ -10,6 +10,9 @@ spring:
     open-in-view: false
     hibernate:
       ddl-auto: update
+    properties:
+      # jobs are also written and read with plain JDBC in UTC; keep Hibernate on the same clock
+      hibernate.jdbc.time_zone: UTC
 
 naukriradar:
   jobs:
@@ -18,6 +21,12 @@ naukriradar:
     connect-timeout: 5s
     disable-after-failures: 5
     seed-defaults: true
+    schedule:
+      enabled: true
+      fetch-cron: "0 0 */6 * * *"
+      cleanup-cron: "0 30 3 * * *"
+      close-after-days: 7
+      delete-after-days: 60
 
 management:
   endpoints:

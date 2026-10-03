@@ -19,4 +19,6 @@ public interface JobSourceRepository extends JpaRepository<JobSource, String> {
 
 	List<JobSource> findAllByOrderByPriorityDescCodeAsc();
 
+	List<JobSource> findByEnabledTrueOrderByPriorityDescCodeAsc();
+
 }

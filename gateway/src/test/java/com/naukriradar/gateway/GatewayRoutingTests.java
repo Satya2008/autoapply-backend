@@ -72,6 +72,18 @@ class GatewayRoutingTests {
 	}
 
 	@Test
+	void jobSearchAndRunsReachJobService() throws Exception {
+		HttpResponse<String> search = send(HttpRequest.newBuilder(uri("/api/v1/jobs?q=java")));
+		HttpResponse<String> detail = send(HttpRequest.newBuilder(uri("/api/v1/jobs/abc")));
+		HttpResponse<String> runs = send(HttpRequest.newBuilder(uri("/api/v1/admin/jobs/fetch-runs"))
+				.POST(HttpRequest.BodyPublishers.noBody()));
+
+		assertThat(search.body()).isEqualTo("job-service saw GET /api/v1/jobs as null");
+		assertThat(detail.body()).isEqualTo("job-service saw GET /api/v1/jobs/abc as null");
+		assertThat(runs.body()).isEqualTo("job-service saw POST /api/v1/admin/jobs/fetch-runs as null");
+	}
+
+	@Test
 	void unknownPathsAreNotForwarded() throws Exception {
 		HttpResponse<String> response = send(HttpRequest.newBuilder(uri("/api/v1/unknown")));
 

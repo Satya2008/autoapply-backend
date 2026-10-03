@@ -31,6 +31,7 @@ client ──► gateway :8080 ─┬─► core-api    :8081 ──► MySQL na
 - Spring Data JPA, Bean Validation, Actuator, springdoc OpenAPI, Lombok
 - Apache PDFBox and POI for reading resumes
 - RestClient and JsonPath for job boards; WireMock in tests
+- Virtual threads for parallel fetching, MySQL FULLTEXT search, keyset pagination
 
 ## Run locally
 
@@ -109,6 +110,26 @@ field is (`fieldMappings`, as JsonPath). Arbeitnow is created on first start fro
 - Sources can't point at localhost or private networks unless
   `naukriradar.jobs.allow-private-hosts` is on.
 
+### Fetching every board, and search
+
+| Endpoint | What it does |
+|---|---|
+| `POST /api/v1/admin/jobs/fetch-runs` | Fetch every enabled board now; returns **202** and the run |
+| `GET /api/v1/admin/jobs/fetch-runs/{id}` | Run status, totals and a line per board |
+| `GET /api/v1/admin/jobs/fetch-runs` | Recent runs |
+| `POST /api/v1/admin/jobs/cleanup` | Close jobs unseen for 7 days, delete ones unseen for 60 |
+| `GET /api/v1/jobs?q=&location=&remote=&postedWithinDays=&source=&limit=&cursor=` | Search active jobs, newest first |
+| `GET /api/v1/jobs/{id}` | One job with its description |
+
+- Each board runs on its own virtual thread with its own deadline, so a slow or dead
+  board doesn't hold up the rest. A run fetches every 6 hours; cleanup runs nightly.
+- The same posting on two boards is stored once. Its fingerprint is a hash of title,
+  company and city after removing "(m/w/d)", "GmbH", "Pvt Ltd", accents and punctuation,
+  and it is a unique key, so MySQL decides what's a duplicate even when boards save at the same time.
+- Search uses a MySQL FULLTEXT index. Short or symbol terms such as `go`, `c#` or `.net`,
+  which FULLTEXT can't index, fall back to a whole-word match on the title.
+- Paging is keyset: pass the `nextCursor` you got back.
+
 Errors come back as [Problem Details](https://www.rfc-editor.org/rfc/rfc9457)
 (`application/problem+json`), with field errors under `errors`.
 
@@ -130,4 +151,5 @@ tests route to a fake service, so they need no database.
 - [x] Microservices layout: gateway, core-api, shared library
 - [x] Phase 2: resume upload and skill extraction
 - [x] Phase 3: job-service with the first job board (Arbeitnow)
-- [ ] Phase 4: fetch many boards in parallel, de-duplicate across boards, search
+- [x] Phase 4: fetch many boards in parallel, de-duplicate across boards, search
+- [ ] Phase 5: matching-service, scoring jobs against a profile
