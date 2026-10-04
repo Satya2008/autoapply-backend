@@ -9,6 +9,8 @@ import java.util.List;
 import java.util.Map;
 
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
+import com.naukriradar.common.resilience.Resilience;
+import com.naukriradar.common.resilience.ResilienceProperties;
 import com.naukriradar.job.config.JobsProperties;
 import com.naukriradar.job.exception.JobSourceFetchException;
 import com.naukriradar.job.model.JobField;
@@ -32,6 +34,7 @@ import static com.github.tomakehurst.wiremock.client.WireMock.post;
 import static com.github.tomakehurst.wiremock.client.WireMock.postRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlPathEqualTo;
 import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig;
+import static com.github.tomakehurst.wiremock.stubbing.Scenario.STARTED;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -137,6 +140,19 @@ class GenericRestJobProviderTest {
 	}
 
 	@Test
+	void aBoardThatFailsBrieflyIsRetriedAndTheFetchSucceeds() throws IOException {
+		board.stubFor(get(urlPathEqualTo("/api/job-board-api")).inScenario("flaky").whenScenarioStateIs(STARTED)
+				.willReturn(aResponse().withStatus(503)).willSetStateTo("recovering"));
+		board.stubFor(get(urlPathEqualTo("/api/job-board-api")).inScenario("flaky").whenScenarioStateIs("recovering")
+				.willReturn(aResponse().withStatus(502)).willSetStateTo("up"));
+		board.stubFor(get(urlPathEqualTo("/api/job-board-api")).inScenario("flaky").whenScenarioStateIs("up")
+				.willReturn(okJson(fixture("arbeitnow-page1.json"))));
+
+		assertThat(provider(true).fetchPage(arbeitnow(), new FetchRequest("", 1))).isNotEmpty();
+		board.verify(3, getRequestedFor(urlPathEqualTo("/api/job-board-api")));
+	}
+
+	@Test
 	void slowBoardsTimeOut() {
 		board.stubFor(get(urlPathEqualTo("/api/job-board-api"))
 				.willReturn(okJson("{\"data\": []}").withFixedDelay(2_500)));
@@ -216,7 +232,8 @@ class GenericRestJobProviderTest {
 
 	private GenericRestJobProvider provider(JobsProperties properties) {
 		return new GenericRestJobProvider(RestClient.builder(), HttpClient.newHttpClient(),
-				new SettingPlaceholderResolver(environment), new HostGuard(properties), properties);
+				new SettingPlaceholderResolver(environment), new HostGuard(properties), properties,
+				new Resilience(new ResilienceProperties(3, Duration.ofMillis(10), 0.5, 50, 20, 10, Duration.ofSeconds(30), 10)));
 	}
 
 	private static String fixture(String name) throws IOException {

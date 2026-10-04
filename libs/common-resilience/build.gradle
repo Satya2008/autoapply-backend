@@ -1,0 +1,13 @@
+plugins {
+	id 'java-library'
+}
+
+description = 'Retry, circuit breaker and bulkhead around calls to other systems'
+
+dependencies {
+	api project(':libs:common-web')
+	api 'io.github.resilience4j:resilience4j-circuitbreaker:2.4.0'
+	api 'io.github.resilience4j:resilience4j-retry:2.4.0'
+	api 'io.github.resilience4j:resilience4j-bulkhead:2.4.0'
+	testImplementation 'org.springframework.boot:spring-boot-starter-test'
+}

@@ -24,7 +24,7 @@ spring:
             - id: matching-service
               uri: ${services.matching-service}
               predicates:
-                - Path=/api/v1/me/matches,/api/v1/me/matches/**
+                - Path=/api/v1/me/matches,/api/v1/me/matches/**,/api/v1/admin/prompts,/api/v1/admin/prompts/**,/api/v1/admin/ai/**
             - id: core-api
               uri: ${services.core-api}
               predicates:
@@ -53,6 +53,25 @@ spring:
                 - Path=/api/v1/admin/cache/matching-service,/api/v1/admin/cache/matching-service/**
               filters:
                 - RewritePath=/api/v1/admin/cache/matching-service(?<rest>.*), /api/v1/admin/cache$\{rest}
+            # Each service's dependency health: /api/v1/admin/resilience/<service>.
+            - id: core-api-resilience
+              uri: ${services.core-api}
+              predicates:
+                - Path=/api/v1/admin/resilience/core-api
+              filters:
+                - SetPath=/api/v1/admin/resilience
+            - id: job-service-resilience
+              uri: ${services.job-service}
+              predicates:
+                - Path=/api/v1/admin/resilience/job-service
+              filters:
+                - SetPath=/api/v1/admin/resilience
+            - id: matching-service-resilience
+              uri: ${services.matching-service}
+              predicates:
+                - Path=/api/v1/admin/resilience/matching-service
+              filters:
+                - SetPath=/api/v1/admin/resilience
             # Each service's OpenAPI document, so one Swagger UI here covers them all.
             - id: core-api-docs
               uri: ${services.core-api}

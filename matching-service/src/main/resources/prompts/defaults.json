@@ -1,0 +1,28 @@
+[
+  {
+    "code": "ai-test",
+    "system": "You check that an AI provider is set up correctly.",
+    "template": "Reply with status \"ok\" and one short sentence about {{topic}}.",
+    "outputSchema": {
+      "type": "object",
+      "required": ["status", "message"],
+      "properties": {
+        "status": { "type": "string", "enum": ["ok"] },
+        "message": { "type": "string", "maxLength": 200 }
+      }
+    }
+  },
+  {
+    "code": "job-fit",
+    "system": "You are an experienced technical recruiter. Judge only from the facts given. Never invent experience the candidate does not list.",
+    "template": "Candidate:\n{{profile}}\n\nJob posting:\n{{job}}\n\nHow well does this candidate fit this job? Give a score from 0 (no fit) to 100 (perfect fit) and up to three short reasons.",
+    "outputSchema": {
+      "type": "object",
+      "required": ["score", "reasons"],
+      "properties": {
+        "score": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "reasons": { "type": "array", "items": { "type": "string", "maxLength": 200 } }
+      }
+    }
+  }
+]

@@ -18,7 +18,10 @@ import com.jayway.jsonpath.JsonPath;
 import com.jayway.jsonpath.JsonPathException;
 import com.jayway.jsonpath.Option;
 import com.jayway.jsonpath.PathNotFoundException;
+import com.naukriradar.common.resilience.DependencyUnavailableException;
+import com.naukriradar.common.resilience.Resilience;
 import com.naukriradar.job.config.JobsProperties;
+import com.naukriradar.job.exception.BoardUnavailableException;
 import com.naukriradar.job.exception.JobSourceFetchException;
 import com.naukriradar.job.model.JobField;
 import com.naukriradar.job.model.JobSource;
@@ -51,14 +54,17 @@ public class GenericRestJobProvider implements JobSourceProvider {
 	private final SettingPlaceholderResolver placeholders;
 	private final HostGuard hostGuard;
 	private final JobsProperties properties;
+	private final Resilience resilience;
 
 	public GenericRestJobProvider(RestClient.Builder restClientBuilder, HttpClient httpClient,
-			SettingPlaceholderResolver placeholders, HostGuard hostGuard, JobsProperties properties) {
+			SettingPlaceholderResolver placeholders, HostGuard hostGuard, JobsProperties properties,
+			Resilience resilience) {
 		this.restClientBuilder = restClientBuilder;
 		this.httpClient = httpClient;
 		this.placeholders = placeholders;
 		this.hostGuard = hostGuard;
 		this.properties = properties;
+		this.resilience = resilience;
 	}
 
 	@Override
@@ -70,7 +76,14 @@ public class GenericRestJobProvider implements JobSourceProvider {
 	public List<RawJob> fetchPage(JobSource source, FetchRequest request) {
 		URI uri = buildUri(source, request);
 		hostGuard.check(uri);
-		String body = call(source, uri, request);
+		String body;
+		try {
+			// each board has its own breaker: one board down never slows the others
+			body = resilience.call("board-" + source.getCode(), () -> call(source, uri, request));
+		}
+		catch (DependencyUnavailableException ex) {
+			throw new JobSourceFetchException("Skipped: the board failed several times just now; calls are paused for a moment.", ex);
+		}
 		return extract(source, body);
 	}
 
@@ -103,8 +116,12 @@ public class GenericRestJobProvider implements JobSourceProvider {
 				spec.contentType(MediaType.APPLICATION_JSON).body(fillBody(source.getBodyTemplate(), request));
 			}
 			byte[] bytes = spec.exchange((req, response) -> {
+				int status = response.getStatusCode().value();
+				if (status >= 500 || status == 429) {
+					throw new BoardUnavailableException("The board answered HTTP " + status + ".");
+				}
 				if (response.getStatusCode().isError()) {
-					throw new JobSourceFetchException("The board answered HTTP " + response.getStatusCode().value() + ".");
+					throw new JobSourceFetchException("The board answered HTTP " + status + ".");
 				}
 				try (InputStream in = response.getBody()) {
 					byte[] read = in.readNBytes((int) Math.min(Integer.MAX_VALUE - 8, maxBytes + 1));

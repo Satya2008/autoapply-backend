@@ -35,6 +35,7 @@ client ──► gateway :8080 ─┬─► core-api         :8081 ──► MyS
 - RestClient and JsonPath for job boards; WireMock in tests
 - Virtual threads for parallel fetching, MySQL FULLTEXT search, keyset pagination
 - Redis: shared locks, a two-level cache (Caffeine + Redis), pub/sub, rate limits; ShedLock
+- Resilience4j (retry with jitter, circuit breaker, bulkhead); Anthropic, OpenAI, Gemini and Ollama APIs
 
 ## Run locally
 
@@ -256,6 +257,30 @@ Every service can run as several instances behind the gateway.
   clock. Runs: 3 then one per 10 minutes; resume upload: 5 per minute; everything else: 120
   then 2 per second. Refusals are `429` with `Retry-After`. If Redis is down, requests pass.
 
+### Resilience and AI
+
+| Endpoint | What it does |
+|---|---|
+| `GET /api/v1/admin/resilience/{service}` | Each dependency of that service: circuit state, recent failures, free slots |
+| `GET /api/v1/admin/prompts` | Every prompt version |
+| `POST /api/v1/admin/prompts/{code}/versions` | Add a version (inactive, except a prompt's first) |
+| `POST /api/v1/admin/prompts/{code}/versions/{v}/activate` | Use that version; activating an old one is the rollback |
+| `POST /api/v1/admin/ai/test` | Try the AI setup with a tiny prompt, optionally one provider |
+| `GET /api/v1/admin/ai/usage?from=&to=&groupBy=` | Calls, tokens and cost by provider, model, purpose, user or day |
+
+- Every call to a job board, another service or an AI provider goes through
+  retry(circuit breaker(bulkhead(call))). Only transient failures (5xx, 429, network) are
+  retried, with exponential backoff and jitter; an open circuit fails at once.
+- AI lives in matching-service. Providers are configured accounts (`type`, URL, key from an
+  environment variable: `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, or
+  `OLLAMA_URL` for a local Ollama). Each purpose has a route of `provider:model` entries
+  tried in order; providers without a key are skipped, so the app runs with no AI at all.
+- Prompts are versioned in the database, with the JSON Schema their answer must match.
+  Answers are checked against it: out-of-range numbers are clamped, wrong shapes rejected
+  and the next provider tried.
+- Every answer is recorded with tokens, cost and latency. Each user has a daily AI budget
+  ($0.50 by default); past it, AI is skipped for them.
+
 Errors come back as [Problem Details](https://www.rfc-editor.org/rfc/rfc9457)
 (`application/problem+json`), with field errors under `errors`.
 
@@ -282,7 +307,9 @@ tests route to a fake service, so they need no database. Tests need Redis runnin
 - [x] Phase 6: applications, with risk checks and a "needs your click" queue (simulate mode)
 - [x] Phase 7: runtime settings, encrypted secrets, audit log, schedulable jobs
 - [x] Phase 10: Redis (locks, two-level cache, rate limits, settings sync, ShedLock)
+- [x] Phase 11: resilience (retry, circuit breaker, bulkhead) and the AI foundation
+- [ ] Phase 12: AI parsing and re-ranking
 - [ ] Phase 9: Docker, Flyway, Testcontainers
-- [ ] Phases 11–19
+- [ ] Phases 13–19
 - [ ] Phase 8, last: security (JWT at the gateway, roles, Google sign-in). Nothing is
       deployed publicly before it.

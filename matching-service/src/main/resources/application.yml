@@ -42,6 +42,42 @@ naukriradar:
     worker-threads: 2
     queue-capacity: 20
 
+  # A provider is used only when it has a key (Ollama needs none, just a running server).
+  # Set the keys as environment variables; never commit them.
+  ai:
+    enabled: true
+    daily-budget-usd: 0.50
+    providers:
+      anthropic:
+        type: anthropic
+        base-url: https://api.anthropic.com
+        api-key: ${ANTHROPIC_API_KEY:}
+      openai:
+        type: openai
+        base-url: https://api.openai.com
+        api-key: ${OPENAI_API_KEY:}
+      gemini:
+        type: gemini
+        base-url: https://generativelanguage.googleapis.com
+        api-key: ${GEMINI_API_KEY:}
+      ollama:
+        type: ollama
+        base-url: ${OLLAMA_URL:}
+        timeout: 120s
+    # tried in order until one answers; a purpose not listed uses "default"
+    routes:
+      default:
+        - anthropic:claude-haiku-4-5-20251001
+        - openai:gpt-4o-mini
+        - gemini:gemini-2.0-flash
+        - ollama:llama3.2
+    # USD per million tokens; check the vendors' current price lists
+    prices:
+      "[claude-haiku-4-5-20251001]": { input: 1.00, output: 5.00 }
+      "[gpt-4o-mini]": { input: 0.15, output: 0.60 }
+      "[gemini-2.0-flash]": { input: 0.10, output: 0.40 }
+      "[llama3.2]": { input: 0, output: 0 }
+
 management:
   endpoints:
     web:

@@ -35,8 +35,9 @@ class ApplyRunSweepIT {
 		String crashed = store.create(UUID.randomUUID().toString()).getId();
 		String live = store.create(UUID.randomUUID().toString()).getId();
 		String fresh = store.create(UUID.randomUUID().toString()).getId();
-		jdbc.update("UPDATE apply_runs SET started_at = started_at - INTERVAL 5 MINUTE WHERE id IN (?, ?)", crashed, live);
+		// lease first: the background sweep may run at any moment
 		leases.begin(ApplyRunStore.LEASE, live);
+		jdbc.update("UPDATE apply_runs SET started_at = started_at - INTERVAL 5 MINUTE WHERE id IN (?, ?)", crashed, live);
 		try {
 			store.closeInterruptedRuns();
 		}

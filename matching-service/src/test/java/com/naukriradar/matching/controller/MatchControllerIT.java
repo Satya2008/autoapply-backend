@@ -270,8 +270,9 @@ class MatchControllerIT {
 		String stuck = runStore.create(user).getId();
 		String fresh = runStore.create(newUser()).getId();
 		String live = runStore.create(newUser()).getId();
-		jdbc.update("UPDATE match_runs SET started_at = started_at - INTERVAL 5 MINUTE WHERE id IN (?, ?)", stuck, live);
+		// lease first: the background sweep may run at any moment
 		leases.begin("match", live);
+		jdbc.update("UPDATE match_runs SET started_at = started_at - INTERVAL 5 MINUTE WHERE id IN (?, ?)", stuck, live);
 		try {
 			runStore.closeInterruptedRuns();
 		}

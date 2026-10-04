@@ -142,6 +142,20 @@ class GatewayRoutingTests {
 	}
 
 	@Test
+	void promptsAndAiAdminGoToMatchingAndResilienceToEachService() throws Exception {
+		HttpResponse<String> prompts = send(HttpRequest.newBuilder(uri("/api/v1/admin/prompts/job-fit/versions"))
+				.POST(HttpRequest.BodyPublishers.noBody()));
+		HttpResponse<String> usage = send(HttpRequest.newBuilder(uri("/api/v1/admin/ai/usage?groupBy=model")));
+		HttpResponse<String> jobs = send(HttpRequest.newBuilder(uri("/api/v1/admin/resilience/job-service")));
+		HttpResponse<String> core = send(HttpRequest.newBuilder(uri("/api/v1/admin/resilience/core-api")));
+
+		assertThat(prompts.body()).isEqualTo("matching-service saw POST /api/v1/admin/prompts/job-fit/versions as null");
+		assertThat(usage.body()).isEqualTo("matching-service saw GET /api/v1/admin/ai/usage as null");
+		assertThat(jobs.body()).isEqualTo("job-service saw GET /api/v1/admin/resilience as null");
+		assertThat(core.body()).isEqualTo("core-api saw GET /api/v1/admin/resilience as null");
+	}
+
+	@Test
 	void internalEndpointsAreNotExposed() throws Exception {
 		assertThat(send(HttpRequest.newBuilder(uri("/internal/v1/users/x/matching-profile"))).statusCode()).isEqualTo(404);
 		assertThat(send(HttpRequest.newBuilder(uri("/internal/v1/jobs/candidates"))

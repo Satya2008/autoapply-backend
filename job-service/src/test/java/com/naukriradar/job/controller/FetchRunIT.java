@@ -153,10 +153,12 @@ class FetchRunIT {
 	@Test
 	void runLeftRunningByACrashIsClosedButLiveAndFreshRunsAreNot() {
 		Instant earlier = Instant.now().minus(5, ChronoUnit.MINUTES);
-		String crashed = runService.start(RunTrigger.SCHEDULED, earlier);
-		String live = runService.start(RunTrigger.SCHEDULED, earlier);
-		String fresh = runService.start(RunTrigger.SCHEDULED, Instant.now());
+		String live = runService.start(RunTrigger.SCHEDULED, Instant.now());
+		// lease first: the background sweep may run at any moment
 		leases.begin("fetch", live);
+		jdbc.update("UPDATE fetch_runs SET started_at = started_at - INTERVAL 5 MINUTE WHERE id = ?", live);
+		String crashed = runService.start(RunTrigger.SCHEDULED, earlier);
+		String fresh = runService.start(RunTrigger.SCHEDULED, Instant.now());
 		try {
 			runService.closeInterruptedRuns();
 		}
