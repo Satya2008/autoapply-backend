@@ -16,3 +16,4 @@ bin/
 
 # Uploaded files in dev
 data/
+logs/

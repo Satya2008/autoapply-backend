@@ -54,7 +54,15 @@ client ──► gateway :8080 ─┬─► core-api         :8081 ──► MyS
    Start Redis on `localhost:6379` too (override with `REDIS_HOST` / `REDIS_PORT`). Tests
    use its database 1.
 
-2. Start each service in its own terminal:
+2. Start everything at once (Windows PowerShell), then walk the main flow:
+
+   ```powershell
+   .\scripts\start-local.ps1      # builds, starts all four services, waits until healthy
+   python scripts\smoke-test.py   # user -> profile -> fetch jobs -> match -> apply run
+   .\scripts\stop-local.ps1       # stops them
+   ```
+
+   Logs are in `logs/`. Or start each service in its own terminal:
 
    ```bash
    ./gradlew :core-api:bootRun
