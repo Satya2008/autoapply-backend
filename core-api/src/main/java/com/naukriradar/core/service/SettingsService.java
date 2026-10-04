@@ -33,9 +33,9 @@ import org.springframework.transaction.event.TransactionalEventListener;
  * every call.
  *
  * <p>The cache entry is dropped only after the change commits. Dropping it earlier would let
- * a reader reload the old value before the commit and keep it cached. Entries also expire
- * after five minutes, which bounds staleness on other instances until Redis pub/sub
- * (Phase 10) tells them directly.
+ * a reader reload the old value before the commit and keep it cached. Other instances hear
+ * about the change through Redis ({@link com.naukriradar.core.settings.SettingsSync}).
+ * Entries also expire after five minutes, in case such a message is lost.
  */
 @Service
 public class SettingsService implements Settings {
@@ -129,8 +129,11 @@ public class SettingsService implements Settings {
 		return view(definition, Optional.empty());
 	}
 
-	/** Runs before other listeners, so they read the new value. */
-	@TransactionalEventListener
+	/**
+	 * Runs before other listeners, so they read the new value. A change from another
+	 * instance arrives outside any transaction, hence {@code fallbackExecution}.
+	 */
+	@TransactionalEventListener(fallbackExecution = true)
 	@Order(0)
 	public void forget(SettingChangedEvent event) {
 		cache.invalidate(event.key());

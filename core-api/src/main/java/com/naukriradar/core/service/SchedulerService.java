@@ -12,6 +12,10 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import com.naukriradar.common.exception.ConflictException;
 import com.naukriradar.common.exception.NotFoundException;
+import com.naukriradar.common.exception.ServiceUnavailableException;
+import com.naukriradar.common.redis.lock.DistributedLock;
+import com.naukriradar.common.redis.lock.LockHandle;
+import com.naukriradar.common.redis.lock.LockUnavailableException;
 import com.naukriradar.core.audit.Audited;
 import com.naukriradar.core.config.ApplicationProperties;
 import com.naukriradar.core.dto.response.ScheduledJobResponse;
@@ -32,15 +36,24 @@ import org.springframework.transaction.event.TransactionalEventListener;
 
 /**
  * Schedules the background jobs from their cron settings, and moves them the moment a
- * setting changes: no restart. A job never overlaps itself; a trigger that finds it still
- * running is skipped. Remembers each job's last run for the admin screen.
+ * setting changes: no restart. Remembers each job's last run for the admin screen.
+ *
+ * <p>Every instance schedules every job, and a Redis lock per job lets one of them run it. A
+ * job never overlaps itself, here or across instances; a trigger that finds it running is
+ * skipped. After a scheduled run the lock is kept for at least {@link #MIN_HOLD}, so an
+ * instance whose clock is a few seconds behind doesn't run the same trigger again.
  */
 @Service
 public class SchedulerService {
 
 	private static final Logger log = LoggerFactory.getLogger(SchedulerService.class);
 
+	static final Duration MIN_HOLD = Duration.ofSeconds(30);
+
+	private static final String SCHEDULE = "schedule";
+
 	private final ThreadPoolTaskScheduler scheduler;
+	private final DistributedLock lock;
 	private final Settings settings;
 	private final ApplicationProperties properties;
 	private final boolean schedulingEnabled;
@@ -48,8 +61,10 @@ public class SchedulerService {
 	private final Clock clock = Clock.systemUTC();
 
 	public SchedulerService(ThreadPoolTaskScheduler jobScheduler, List<ScheduledJob> jobs, Settings settings,
-			ApplicationProperties properties, @Value("${naukriradar.scheduler.enabled:true}") boolean schedulingEnabled) {
+			ApplicationProperties properties, DistributedLock lock,
+			@Value("${naukriradar.scheduler.enabled:true}") boolean schedulingEnabled) {
 		this.scheduler = jobScheduler;
+		this.lock = lock;
 		this.settings = settings;
 		this.properties = properties;
 		this.schedulingEnabled = schedulingEnabled;
@@ -70,7 +85,7 @@ public class SchedulerService {
 	}
 
 	/** After the settings cache has dropped the old value (see SettingsService). */
-	@TransactionalEventListener
+	@TransactionalEventListener(fallbackExecution = true)
 	@Order(10)
 	public void onSettingChanged(SettingChangedEvent event) {
 		jobs.values().stream()
@@ -88,8 +103,9 @@ public class SchedulerService {
 		if (state == null) {
 			throw new NotFoundException("No job " + name + ".");
 		}
-		if (state.running.get()) {
-			throw new ConflictException("Job " + name + " is already running.");
+		if (state.running.get() || heldElsewhere(state)) {
+			throw new ConflictException("Job " + name + " is already running, or has just run on schedule. "
+					+ "Try again in a minute.");
 		}
 		scheduler.execute(() -> runGuarded(state, "manual"));
 		return view(state);
@@ -105,7 +121,7 @@ public class SchedulerService {
 			return;
 		}
 		String cron = settings.getString(state.job.cronSetting());
-		state.future = scheduler.schedule(() -> runGuarded(state, "schedule"), new CronTrigger(cron, properties.zone()));
+		state.future = scheduler.schedule(() -> runGuarded(state, SCHEDULE), new CronTrigger(cron, properties.zone()));
 		log.info("Job {} scheduled with '{}'", state.job.name(), cron);
 	}
 
@@ -114,6 +130,31 @@ public class SchedulerService {
 			log.info("Job {} still running; skipping this {} trigger", state.job.name(), trigger);
 			return;
 		}
+		LockHandle held;
+		try {
+			held = lock.tryAcquire(lockName(state)).orElse(null);
+		}
+		catch (LockUnavailableException ex) {
+			// running unguarded could run the job on every instance at once
+			log.warn("Job {} skipped: {}", state.job.name(), ex.getMessage());
+			state.running.set(false);
+			return;
+		}
+		if (held == null) {
+			log.info("Job {} is running on another instance; skipping this {} trigger", state.job.name(), trigger);
+			state.running.set(false);
+			return;
+		}
+		try {
+			run(state, trigger);
+		}
+		finally {
+			held.releaseAfter(SCHEDULE.equals(trigger) ? MIN_HOLD : Duration.ZERO);
+			state.running.set(false);
+		}
+	}
+
+	private void run(JobState state, String trigger) {
 		Instant started = clock.instant();
 		state.lastTrigger = trigger;
 		state.lastStartedAt = started;
@@ -128,8 +169,20 @@ public class SchedulerService {
 		}
 		finally {
 			state.lastFinishedAt = clock.instant();
-			state.running.set(false);
 		}
+	}
+
+	private boolean heldElsewhere(JobState state) {
+		try {
+			return lock.isHeld(lockName(state));
+		}
+		catch (LockUnavailableException ex) {
+			throw new ServiceUnavailableException("Jobs can't be started right now: the lock service is unreachable.");
+		}
+	}
+
+	private static String lockName(JobState state) {
+		return "job:" + state.job.name();
 	}
 
 	private ScheduledJobResponse view(JobState state) {

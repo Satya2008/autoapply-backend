@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import com.naukriradar.common.exception.NotFoundException;
+import com.naukriradar.common.redis.run.RunLeases;
 import com.naukriradar.core.client.MatchForApply;
 import com.naukriradar.core.client.MatchingClient;
 import com.naukriradar.core.client.UpstreamException;
@@ -30,14 +31,16 @@ public class ApplyRunWorker {
 	private final ApplyExecutor executor;
 	private final ApplyRunStore store;
 	private final Settings settings;
+	private final RunLeases leases;
 
 	public ApplyRunWorker(MatchingClient matchingClient, ApplyPlanner planner, ApplyExecutor executor,
-			ApplyRunStore store, Settings settings) {
+			ApplyRunStore store, Settings settings, RunLeases leases) {
 		this.matchingClient = matchingClient;
 		this.planner = planner;
 		this.executor = executor;
 		this.store = store;
 		this.settings = settings;
+		this.leases = leases;
 	}
 
 	/** For API-started runs: returns at once and runs on the bounded pool. */
@@ -46,7 +49,10 @@ public class ApplyRunWorker {
 		runNow(runId);
 	}
 
-	/** For the scheduler, which already runs on its own thread and goes user by user. */
+	/**
+	 * For the scheduler, which already runs on its own thread and goes user by user. Gives
+	 * back the run's lease when done, whatever happens.
+	 */
 	public void runNow(String runId) {
 		try {
 			String userId = store.userOf(runId);
@@ -62,6 +68,9 @@ public class ApplyRunWorker {
 		catch (RuntimeException ex) {
 			log.error("Apply run {} failed", runId, ex);
 			store.fail(runId, "Something went wrong while applying (" + ex.getClass().getSimpleName() + ").");
+		}
+		finally {
+			leases.end(ApplyRunStore.LEASE, runId);
 		}
 	}
 

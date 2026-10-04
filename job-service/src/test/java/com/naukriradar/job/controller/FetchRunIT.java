@@ -9,6 +9,9 @@ import java.util.UUID;
 import com.github.tomakehurst.wiremock.client.WireMock;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import com.jayway.jsonpath.JsonPath;
+import com.naukriradar.common.redis.lock.DistributedLock;
+import com.naukriradar.common.redis.lock.LockHandle;
+import com.naukriradar.common.redis.run.RunLeases;
 import com.naukriradar.job.model.FetchRun;
 import com.naukriradar.job.model.FetchRunStatus;
 import com.naukriradar.job.model.RunTrigger;
@@ -73,6 +76,12 @@ class FetchRunIT {
 
 	@Autowired
 	private JdbcTemplate jdbc;
+
+	@Autowired
+	private RunLeases leases;
+
+	@Autowired
+	private DistributedLock lock;
 
 	/** Only this test's boards may take part in a run. */
 	@BeforeEach
@@ -142,14 +151,34 @@ class FetchRunIT {
 	}
 
 	@Test
-	void runLeftRunningByACrashIsClosedOnStartup() {
-		String runId = runService.start(RunTrigger.SCHEDULED, Instant.now());
+	void runLeftRunningByACrashIsClosedButLiveAndFreshRunsAreNot() {
+		Instant earlier = Instant.now().minus(5, ChronoUnit.MINUTES);
+		String crashed = runService.start(RunTrigger.SCHEDULED, earlier);
+		String live = runService.start(RunTrigger.SCHEDULED, earlier);
+		String fresh = runService.start(RunTrigger.SCHEDULED, Instant.now());
+		leases.begin("fetch", live);
+		try {
+			runService.closeInterruptedRuns();
+		}
+		finally {
+			leases.end("fetch", live);
+		}
 
-		runService.closeInterruptedRuns();
-
-		FetchRun run = runRepository.findById(runId).orElseThrow();
+		FetchRun run = runRepository.findById(crashed).orElseThrow();
 		assertThat(run.getStatus()).isEqualTo(FetchRunStatus.FAILED);
 		assertThat(run.getMessage()).contains("Interrupted");
+		assertThat(runRepository.findById(live).orElseThrow().getStatus()).isEqualTo(FetchRunStatus.RUNNING);
+		assertThat(runRepository.findById(fresh).orElseThrow().getStatus()).isEqualTo(FetchRunStatus.RUNNING);
+		jdbc.update("UPDATE fetch_runs SET status = 'FAILED' WHERE id IN (?, ?)", live, fresh);
+	}
+
+	@Test
+	void aRunGoingOnAnotherInstanceBlocksANewOne() throws Exception {
+		try (LockHandle otherInstance = lock.tryAcquire("fetch-run").orElseThrow()) {
+			mvc.perform(post("/api/v1/admin/jobs/fetch-runs"))
+					.andExpect(status().isConflict())
+					.andExpect(jsonPath("$.detail").value(containsString("another instance")));
+		}
 	}
 
 	@Test

@@ -3,12 +3,14 @@ package com.naukriradar.matching.service;
 import java.util.List;
 
 import com.naukriradar.common.exception.NotFoundException;
+import com.naukriradar.matching.config.CacheConfig;
 import com.naukriradar.matching.dto.response.MatchDetailResponse;
 import com.naukriradar.matching.dto.response.MatchForApplyResponse;
 import com.naukriradar.matching.dto.response.MatchPageResponse;
 import com.naukriradar.matching.mapper.MatchMapper;
 import com.naukriradar.matching.model.JobMatch;
 import com.naukriradar.matching.repository.JobMatchRepository;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,7 +26,12 @@ public class MatchQueryService {
 		this.mapper = mapper;
 	}
 
-	/** Best matches first, keyset-paged on (score, id). */
+	/**
+	 * Best matches first, keyset-paged on (score, id). Pages are cached per user until the
+	 * user's next match run; the key must start with the user id (see {@link MatchCache}).
+	 */
+	@Cacheable(cacheNames = CacheConfig.MATCH_PAGES, sync = true,
+			key = "#userId + ':' + #minScore + ':' + #limit + ':' + (#cursor == null ? '' : #cursor.strip())")
 	@Transactional(readOnly = true)
 	public MatchPageResponse list(String userId, int minScore, String cursor, int limit) {
 		PageRequest page = PageRequest.of(0, limit + 1);

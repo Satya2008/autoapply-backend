@@ -15,6 +15,7 @@ import java.util.concurrent.ThreadLocalRandom;
 
 import com.naukriradar.common.exception.ConflictException;
 import com.naukriradar.common.exception.NotFoundException;
+import com.naukriradar.job.config.CacheConfig;
 import com.naukriradar.job.config.JobsProperties;
 import com.naukriradar.job.dto.response.DryRunResponse;
 import com.naukriradar.job.dto.response.FetchResultResponse;
@@ -37,6 +38,7 @@ import com.naukriradar.job.repository.JobBatchWriter.WriteCounts;
 import com.naukriradar.job.repository.JobSourceRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -82,7 +84,11 @@ public class JobIngestService {
 		this.clock = Clock.systemUTC();
 	}
 
-	/** Fetches and saves. Works on disabled sources too, so an admin can try a fix by hand. */
+	/**
+	 * Fetches and saves. Works on disabled sources too, so an admin can try a fix by hand.
+	 * Cached job details are dropped afterwards: the fetch may have changed any of them.
+	 */
+	@CacheEvict(cacheNames = CacheConfig.JOB_DETAIL, allEntries = true)
 	public FetchResultResponse fetch(String sourceId) {
 		JobSource source = loadForRun(sourceId);
 		if (!runLocks.tryAcquire(source.getId())) {

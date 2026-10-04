@@ -1,5 +1,6 @@
 package com.naukriradar.matching.service;
 
+import com.naukriradar.common.redis.run.RunLeases;
 import com.naukriradar.matching.client.UpstreamException;
 import com.naukriradar.matching.config.AsyncConfig;
 import org.slf4j.Logger;
@@ -19,16 +20,23 @@ public class MatchRunWorker {
 
 	private final MatchEngine engine;
 	private final MatchRunStore store;
+	private final MatchCache cache;
+	private final RunLeases leases;
 
-	public MatchRunWorker(MatchEngine engine, MatchRunStore store) {
+	public MatchRunWorker(MatchEngine engine, MatchRunStore store, MatchCache cache, RunLeases leases) {
 		this.engine = engine;
 		this.store = store;
+		this.cache = cache;
+		this.leases = leases;
 	}
 
+	/** The run's lease was taken when it was created; it is given back here, whatever happens. */
 	@Async(AsyncConfig.MATCH_EXECUTOR)
 	public void execute(String runId) {
+		String userId = null;
 		try {
-			store.succeed(runId, engine.match(store.userOf(runId)));
+			userId = store.userOf(runId);
+			store.succeed(runId, engine.match(userId));
 		}
 		catch (UpstreamException | MatchInputException ex) {
 			store.fail(runId, ex.getMessage());
@@ -36,6 +44,14 @@ public class MatchRunWorker {
 		catch (RuntimeException ex) {
 			log.error("Match run {} failed", runId, ex);
 			store.fail(runId, "Something went wrong while matching (" + ex.getClass().getSimpleName() + ").");
+		}
+		finally {
+			// matches are written as the run goes, so drop the pages even if it failed halfway;
+			// and only after the commit, so nobody caches the old page again in between
+			if (userId != null) {
+				cache.forgetUser(userId);
+			}
+			leases.end(MatchRunStore.LEASE, runId);
 		}
 	}
 

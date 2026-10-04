@@ -7,10 +7,12 @@ import java.time.Instant;
 import java.util.Calendar;
 import java.util.TimeZone;
 
+import com.naukriradar.job.config.CacheConfig;
 import com.naukriradar.job.config.JobScheduleProperties;
 import com.naukriradar.job.dto.response.CleanupResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
@@ -36,6 +38,7 @@ public class JobRetentionService {
 		this.clock = Clock.systemUTC();
 	}
 
+	@CacheEvict(cacheNames = CacheConfig.JOB_DETAIL, allEntries = true)
 	public CleanupResponse cleanUp() {
 		Instant now = clock.instant();
 		Timestamp closeBefore = Timestamp.from(now.minus(Duration.ofDays(properties.closeAfterDays())));

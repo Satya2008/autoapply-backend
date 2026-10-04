@@ -1,4 +1,8 @@
 spring:
+  data:
+    redis:
+      # tests keep to their own Redis database
+      database: 1
   datasource:
     # useAffectedRows: an UPDATE IGNORE that was skipped reports 0, not "1 row matched"
     url: jdbc:mysql://localhost:3306/naukriradar_job_test?useAffectedRows=true

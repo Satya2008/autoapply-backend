@@ -13,11 +13,13 @@ import java.util.List;
 import java.util.TimeZone;
 
 import com.naukriradar.common.exception.NotFoundException;
+import com.naukriradar.job.config.CacheConfig;
 import com.naukriradar.job.dto.request.JobSearchRequest;
 import com.naukriradar.job.dto.response.JobDetailResponse;
 import com.naukriradar.job.dto.response.JobSearchResponse;
 import com.naukriradar.job.dto.response.JobSummaryResponse;
 import com.naukriradar.job.model.JobStatus;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -96,6 +98,8 @@ public class JobSearchService {
 		return new JobSearchResponse(page.stream().map(Row::summary).toList(), nextCursor);
 	}
 
+	/** Cached; {@code sync} sends concurrent misses for one job through the stampede guard. */
+	@Cacheable(cacheNames = CacheConfig.JOB_DETAIL, sync = true)
 	public JobDetailResponse get(String id) {
 		List<JobDetailResponse> found = jdbc.query("SELECT " + COLUMNS
 				+ ", description, status, fetched_at, last_seen_at FROM jobs WHERE id = :id",

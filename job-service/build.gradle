@@ -6,6 +6,9 @@ description = 'job-service: pulls postings from job boards, normalises and store
 
 dependencies {
 	implementation project(':libs:common-web')
+	implementation project(':libs:common-redis')
+	implementation 'net.javacrumbs.shedlock:shedlock-spring:7.10.1'
+	implementation 'net.javacrumbs.shedlock:shedlock-provider-redis-spring:7.10.1'
 	implementation 'org.springframework.boot:spring-boot-starter-actuator'
 	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
 	implementation 'org.springframework.boot:spring-boot-starter-restclient'

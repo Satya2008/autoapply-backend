@@ -1,11 +1,18 @@
 package com.naukriradar.core.controller;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.BooleanSupplier;
 
 import com.jayway.jsonpath.JsonPath;
+import com.naukriradar.common.redis.InstanceId;
+import com.naukriradar.common.redis.RedisKeys;
+import com.naukriradar.core.model.Setting;
+import com.naukriradar.core.repository.SettingRepository;
 import com.naukriradar.core.service.RiskClassifier;
 import com.naukriradar.core.settings.SettingDefinitions;
 import com.naukriradar.core.settings.Settings;
@@ -14,6 +21,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.data.redis.connection.MessageListener;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.listener.ChannelTopic;
+import org.springframework.data.redis.listener.RedisMessageListenerContainer;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
@@ -52,6 +63,21 @@ class AdminSettingsAuditIT {
 
 	@Autowired
 	private JdbcTemplate jdbc;
+
+	@Autowired
+	private SettingRepository settingRepository;
+
+	@Autowired
+	private StringRedisTemplate redis;
+
+	@Autowired
+	private RedisKeys keys;
+
+	@Autowired
+	private InstanceId instance;
+
+	@Autowired
+	private RedisMessageListenerContainer container;
 
 	/** Settings are shared by the whole test context; put every one back. */
 	@AfterEach
@@ -176,9 +202,65 @@ class AdminSettingsAuditIT {
 		mvc.perform(post("/api/v1/admin/scheduler/nope/run")).andExpect(status().isNotFound());
 	}
 
+	@Test
+	void aChangeMadeOnAnotherInstanceReachesThisOneThroughRedis() throws Exception {
+		assertThat(settings.getInt(SettingDefinitions.MATCH_LIMIT)).isEqualTo(Integer.parseInt(
+				SettingDefinitions.find(SettingDefinitions.MATCH_LIMIT).orElseThrow().defaultValue()));
+
+		// the other instance writes the row and announces the key; our cache still has the old value
+		Setting row = new Setting(SettingDefinitions.MATCH_LIMIT);
+		row.change("7", "admin-elsewhere", Instant.now());
+		settingRepository.save(row);
+		assertThat(settings.getInt(SettingDefinitions.MATCH_LIMIT)).isNotEqualTo(7);
+
+		redis.convertAndSend(keys.key("settings-changed"), "other-instance|" + SettingDefinitions.MATCH_LIMIT);
+
+		waitUntil(() -> settings.getInt(SettingDefinitions.MATCH_LIMIT) == 7);
+	}
+
+	@Test
+	void ourOwnAndMalformedMessagesAreIgnored() throws Exception {
+		Setting row = new Setting(SettingDefinitions.MAX_NEEDS_YOU_PER_RUN);
+		int before = settings.getInt(SettingDefinitions.MAX_NEEDS_YOU_PER_RUN);
+		row.change(String.valueOf(before + 1), "admin-elsewhere", Instant.now());
+		settingRepository.save(row);
+
+		redis.convertAndSend(keys.key("settings-changed"), instance.value() + "|" + SettingDefinitions.MAX_NEEDS_YOU_PER_RUN);
+		redis.convertAndSend(keys.key("settings-changed"), "garbage");
+		redis.convertAndSend(keys.key("settings-changed"), "other-instance|no.such.setting");
+		Thread.sleep(300);
+
+		assertThat(settings.getInt(SettingDefinitions.MAX_NEEDS_YOU_PER_RUN)).isEqualTo(before);
+	}
+
+	@Test
+	void aChangeMadeHereIsAnnouncedWithItsKeyButNeverItsValue() throws Exception {
+		List<String> heard = new CopyOnWriteArrayList<>();
+		MessageListener listener = (message, pattern) -> heard.add(new String(message.getBody(), StandardCharsets.UTF_8));
+		ChannelTopic topic = new ChannelTopic(keys.key("settings-changed"));
+		container.addMessageListener(listener, topic);
+		try {
+			Thread.sleep(200);
+			update(SettingDefinitions.AI_API_KEY, "sk-not-for-redis").andExpect(status().isOk());
+
+			waitUntil(() -> !heard.isEmpty());
+			assertThat(heard).containsExactly(instance.value() + "|" + SettingDefinitions.AI_API_KEY);
+		}
+		finally {
+			container.removeMessageListener(listener, topic);
+		}
+	}
+
 	private ResultActions update(String key, String value) throws Exception {
 		return mvc.perform(put(SETTINGS + "/" + key).header("X-User-Id", "admin-1").contentType(MediaType.APPLICATION_JSON)
 				.content("{\"value\": \"" + value + "\"}"));
+	}
+
+	private static void waitUntil(BooleanSupplier condition) throws InterruptedException {
+		for (int i = 0; i < 100 && !condition.getAsBoolean(); i++) {
+			Thread.sleep(50);
+		}
+		assertThat(condition.getAsBoolean()).isTrue();
 	}
 
 	/** Audit entries are written asynchronously; wait for one and return the details of all matching. */

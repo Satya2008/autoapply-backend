@@ -9,6 +9,12 @@ services:
 spring:
   application:
     name: gateway
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      timeout: 2s
+      connect-timeout: 2s
   cloud:
     gateway:
       server:
@@ -27,6 +33,26 @@ spring:
               uri: ${services.job-service}
               predicates:
                 - Path=/api/v1/admin/job-sources,/api/v1/admin/job-sources/**,/api/v1/admin/jobs/**,/api/v1/jobs,/api/v1/jobs/**
+            # Each service's cache admin: /api/v1/admin/cache/<service>[/<cache>] reaches
+            # /api/v1/admin/cache[/<cache>] on that service.
+            - id: core-api-cache
+              uri: ${services.core-api}
+              predicates:
+                - Path=/api/v1/admin/cache/core-api,/api/v1/admin/cache/core-api/**
+              filters:
+                - RewritePath=/api/v1/admin/cache/core-api(?<rest>.*), /api/v1/admin/cache$\{rest}
+            - id: job-service-cache
+              uri: ${services.job-service}
+              predicates:
+                - Path=/api/v1/admin/cache/job-service,/api/v1/admin/cache/job-service/**
+              filters:
+                - RewritePath=/api/v1/admin/cache/job-service(?<rest>.*), /api/v1/admin/cache$\{rest}
+            - id: matching-service-cache
+              uri: ${services.matching-service}
+              predicates:
+                - Path=/api/v1/admin/cache/matching-service,/api/v1/admin/cache/matching-service/**
+              filters:
+                - RewritePath=/api/v1/admin/cache/matching-service(?<rest>.*), /api/v1/admin/cache$\{rest}
             # Each service's OpenAPI document, so one Swagger UI here covers them all.
             - id: core-api-docs
               uri: ${services.core-api}
@@ -56,6 +82,26 @@ springdoc:
         url: /docs/job-service
       - name: matching-service
         url: /docs/matching-service
+
+naukriradar:
+  rate-limit:
+    # first match wins; requests no rule matches (docs, health) are not limited
+    rules:
+      # runs are expensive: a burst of 3, then one more every 10 minutes
+      - name: runs
+        paths: [/api/v1/me/matches/runs, /api/v1/me/applications/runs, /api/v1/admin/jobs/fetch-runs, "/api/v1/admin/job-sources/*/fetch", "/api/v1/admin/scheduler/*/run"]
+        methods: [POST]
+        capacity: 3
+        refill-every: 10m
+      - name: uploads
+        paths: [/api/v1/me/resume]
+        methods: [POST]
+        capacity: 5
+        refill-every: 1m
+      - name: api
+        paths: [/api/v1/**]
+        capacity: 120
+        refill-every: 500ms
 
 management:
   endpoints:

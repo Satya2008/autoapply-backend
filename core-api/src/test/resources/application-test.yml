@@ -1,4 +1,8 @@
 spring:
+  data:
+    redis:
+      # tests keep to their own Redis database
+      database: 1
   datasource:
     url: jdbc:mysql://localhost:3306/naukriradar_core_test
     username: ${DB_USERNAME:root}

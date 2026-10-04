@@ -9,6 +9,7 @@ import java.util.UUID;
 import com.github.tomakehurst.wiremock.client.WireMock;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import com.jayway.jsonpath.JsonPath;
+import com.naukriradar.common.redis.run.RunLeases;
 import com.naukriradar.matching.model.MatchRunStatus;
 import com.naukriradar.matching.repository.MatchRunRepository;
 import com.naukriradar.matching.service.MatchRunStore;
@@ -19,6 +20,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -69,6 +71,12 @@ class MatchControllerIT {
 
 	@Autowired
 	private MatchRunRepository runRepository;
+
+	@Autowired
+	private RunLeases leases;
+
+	@Autowired
+	private JdbcTemplate jdbc;
 
 	@Test
 	void runScoresKeepsTheGoodOnesAndListsThemBestFirst() throws Exception {
@@ -127,6 +135,8 @@ class MatchControllerIT {
 		stubProfile(user, profileJson(user, "[]"));
 		stubCandidates(jobsJson(perfectJob(), okJob()));
 		runToEnd(user);
+		// cached now; the next run must drop it
+		mvc.perform(get("/api/v1/me/matches").header(USER_HEADER, user)).andExpect(jsonPath("$.items", hasSize(2)));
 
 		stubProfile(user, profileJson(user, "[\"globex\"]"));
 		runToEnd(user).andExpect(jsonPath("$.excluded").value(1));
@@ -258,10 +268,21 @@ class MatchControllerIT {
 	void runLeftRunningByACrashIsClosedAndTheUserCanRunAgain() throws Exception {
 		String user = newUser();
 		String stuck = runStore.create(user).getId();
-
-		runStore.closeInterruptedRuns();
+		String fresh = runStore.create(newUser()).getId();
+		String live = runStore.create(newUser()).getId();
+		jdbc.update("UPDATE match_runs SET started_at = started_at - INTERVAL 5 MINUTE WHERE id IN (?, ?)", stuck, live);
+		leases.begin("match", live);
+		try {
+			runStore.closeInterruptedRuns();
+		}
+		finally {
+			leases.end("match", live);
+		}
 
 		assertThat(runRepository.findById(stuck).orElseThrow().getStatus()).isEqualTo(MatchRunStatus.FAILED);
+		assertThat(runRepository.findById(fresh).orElseThrow().getStatus()).isEqualTo(MatchRunStatus.RUNNING);
+		assertThat(runRepository.findById(live).orElseThrow().getStatus()).isEqualTo(MatchRunStatus.RUNNING);
+		jdbc.update("UPDATE match_runs SET status = 'FAILED', running_user_id = NULL WHERE id IN (?, ?)", fresh, live);
 		stubProfile(user, profileJson(user, "[]"));
 		stubCandidates(jobsJson(perfectJob()));
 		startRun(user);

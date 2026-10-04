@@ -16,6 +16,11 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 
 import com.naukriradar.common.exception.ConflictException;
+import com.naukriradar.common.exception.ServiceUnavailableException;
+import com.naukriradar.common.redis.lock.DistributedLock;
+import com.naukriradar.common.redis.lock.LockHandle;
+import com.naukriradar.common.redis.lock.LockUnavailableException;
+import com.naukriradar.common.redis.run.RunLeases;
 import com.naukriradar.job.dto.response.FetchResultResponse;
 import com.naukriradar.job.dto.response.FetchRunResponse;
 import com.naukriradar.job.model.RunStatus;
@@ -32,7 +37,9 @@ import org.springframework.stereotype.Service;
  * source that misses it is cancelled and reported, and the others are unaffected.
  *
  * <p>Runs happen in the background: {@link #start} returns at once with the run id, and the
- * caller polls the run for the result. Only one run at a time per instance.
+ * caller polls the run for the result. Only one run at a time across all instances: a Redis
+ * lock held for the whole run. The run also holds a lease, so a sweep on any instance can
+ * tell a live run from one whose process died.
  */
 @Service
 public class JobFetchOrchestrator {
@@ -44,31 +51,60 @@ public class JobFetchOrchestrator {
 
 	private static final String STARTING = "starting";
 
+	static final String RUN_LOCK = "fetch-run";
+
 	private final JobSourceRepository sourceRepository;
 	private final JobIngestService ingestService;
 	private final FetchRunService runService;
+	private final DistributedLock lock;
+	private final RunLeases leases;
 	private final Clock clock = Clock.systemUTC();
 
 	private final AtomicReference<String> currentRun = new AtomicReference<>();
 
 	public JobFetchOrchestrator(JobSourceRepository sourceRepository, JobIngestService ingestService,
-			FetchRunService runService) {
+			FetchRunService runService, DistributedLock lock, RunLeases leases) {
 		this.sourceRepository = sourceRepository;
 		this.ingestService = ingestService;
 		this.runService = runService;
+		this.lock = lock;
+		this.leases = leases;
 	}
 
+	/**
+	 * @throws ConflictException if a run is going, here or on another instance
+	 * @throws ServiceUnavailableException if Redis is down, so we can't tell
+	 */
 	public FetchRunResponse start(RunTrigger trigger) {
 		if (!currentRun.compareAndSet(null, STARTING)) {
 			throw new ConflictException("A fetch run is already in progress (" + currentRun.get() + ").");
 		}
+		LockHandle runLock;
 		try {
-			String runId = runService.start(trigger, clock.instant());
+			runLock = lock.tryAcquire(RUN_LOCK).orElse(null);
+		}
+		catch (LockUnavailableException ex) {
+			currentRun.set(null);
+			throw new ServiceUnavailableException("Can't start a fetch run: the lock service is unreachable.");
+		}
+		if (runLock == null) {
+			currentRun.set(null);
+			throw new ConflictException("A fetch run is already in progress on another instance.");
+		}
+		String runId = null;
+		try {
+			runId = runService.start(trigger, clock.instant());
 			currentRun.set(runId);
-			Thread.ofVirtual().name("fetch-run-" + runId).start(() -> execute(runId));
+			leases.begin(FetchRunService.LEASE, runId);
+			String id = runId;
+			Thread.ofVirtual().name("fetch-run-" + runId).start(() -> execute(id, runLock));
 			return runService.get(runId);
 		}
 		catch (RuntimeException ex) {
+			if (runId != null) {
+				leases.end(FetchRunService.LEASE, runId);
+			}
+			runLock.close();
 			currentRun.set(null);
 			throw ex;
 		}
@@ -78,7 +114,7 @@ public class JobFetchOrchestrator {
 		return currentRun.get() != null;
 	}
 
-	private void execute(String runId) {
+	private void execute(String runId, LockHandle runLock) {
 		try {
 			List<SourceRef> sources = sourceRepository.findByEnabledTrueOrderByPriorityDescCodeAsc().stream()
 					.map(s -> new SourceRef(s.getId(), s.getCode(),
@@ -91,6 +127,8 @@ public class JobFetchOrchestrator {
 			runService.fail(runId, "Run failed: " + ex.getClass().getSimpleName(), clock.instant());
 		}
 		finally {
+			leases.end(FetchRunService.LEASE, runId);
+			runLock.close();
 			currentRun.set(null);
 		}
 	}
@@ -127,6 +165,9 @@ public class JobFetchOrchestrator {
 		catch (ExecutionException ex) {
 			if (ex.getCause() instanceof ConflictException) {
 				return failed(source, "Skipped: a manual fetch of this source was already running.", started);
+			}
+			if (ex.getCause() instanceof ServiceUnavailableException) {
+				return failed(source, "Skipped: " + ex.getCause().getMessage(), started);
 			}
 			log.error("Source {} failed unexpectedly in a fetch run", source.code(), ex.getCause());
 			return failed(source, "Unexpected error: " + ex.getCause().getClass().getSimpleName(), started);

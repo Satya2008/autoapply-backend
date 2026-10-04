@@ -27,9 +27,12 @@ import org.springframework.test.web.servlet.ResultActions;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.containsInAnyOrder;
+import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.startsWith;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -151,6 +154,38 @@ class JobSearchIT {
 				.andExpect(jsonPath("$.description").value(startsWith("Golang Engineer at Stark")))
 				.andExpect(jsonPath("$.status").value("ACTIVE"));
 		mvc.perform(get("/api/v1/jobs/" + UUID.randomUUID())).andExpect(status().isNotFound());
+	}
+
+	@Test
+	void detailIsCachedUntilAFetchCleanupOrAdminClearsIt() throws Exception {
+		String body = search(Map.of("q", "golang")).andReturn().getResponse().getContentAsString();
+		String id = JsonPath.read(body, "$.items[0].id");
+		mvc.perform(get("/api/v1/jobs/" + id)).andExpect(jsonPath("$.title").value("Golang Engineer"));
+
+		jdbc.update("UPDATE jobs SET title = 'Go Engineer' WHERE id = ?", id);
+		mvc.perform(get("/api/v1/jobs/" + id)).andExpect(jsonPath("$.title").value("Golang Engineer"));
+
+		mvc.perform(delete("/api/v1/admin/cache/job-detail")).andExpect(status().isNoContent());
+		mvc.perform(get("/api/v1/jobs/" + id)).andExpect(jsonPath("$.title").value("Go Engineer"));
+
+		jdbc.update("UPDATE jobs SET title = 'Golang Engineer' WHERE id = ?", id);
+		mvc.perform(post("/api/v1/admin/jobs/cleanup")).andExpect(status().isOk());
+		mvc.perform(get("/api/v1/jobs/" + id)).andExpect(jsonPath("$.title").value("Golang Engineer"));
+	}
+
+	@Test
+	void cacheStatsAreListedAndUnknownCachesAreNotFound() throws Exception {
+		String body = search(Map.of("q", "golang")).andReturn().getResponse().getContentAsString();
+		String id = JsonPath.read(body, "$.items[0].id");
+		mvc.perform(get("/api/v1/jobs/" + id));
+		mvc.perform(get("/api/v1/jobs/" + id));
+
+		mvc.perform(get("/api/v1/admin/cache"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$[0].name").value("job-detail"))
+				.andExpect(jsonPath("$[0].localHits").value(greaterThanOrEqualTo(1)))
+				.andExpect(jsonPath("$[0].localTtl").exists());
+		mvc.perform(delete("/api/v1/admin/cache/nope")).andExpect(status().isNotFound());
 	}
 
 	/**

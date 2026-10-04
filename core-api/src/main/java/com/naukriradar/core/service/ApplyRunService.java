@@ -2,6 +2,7 @@ package com.naukriradar.core.service;
 
 import com.naukriradar.common.exception.ConflictException;
 import com.naukriradar.common.exception.ServiceUnavailableException;
+import com.naukriradar.common.redis.run.RunLeases;
 import com.naukriradar.core.dto.response.ApplyRunResponse;
 import com.naukriradar.core.mapper.ApplicationMapper;
 import com.naukriradar.core.model.ApplyRun;
@@ -16,11 +17,13 @@ public class ApplyRunService {
 	private final ApplyRunStore store;
 	private final ApplyRunWorker worker;
 	private final ApplicationMapper mapper;
+	private final RunLeases leases;
 
-	public ApplyRunService(ApplyRunStore store, ApplyRunWorker worker, ApplicationMapper mapper) {
+	public ApplyRunService(ApplyRunStore store, ApplyRunWorker worker, ApplicationMapper mapper, RunLeases leases) {
 		this.store = store;
 		this.worker = worker;
 		this.mapper = mapper;
+		this.leases = leases;
 	}
 
 	public ApplyRunResponse start(String userId) {
@@ -31,10 +34,13 @@ public class ApplyRunService {
 		catch (DataIntegrityViolationException ex) {
 			throw new ConflictException("An apply run is already going for you. Wait for it to finish.");
 		}
+		// taken before queueing: a run waiting in the queue is alive too; the worker gives it back
+		leases.begin(ApplyRunStore.LEASE, run.getId());
 		try {
 			worker.execute(run.getId());
 		}
 		catch (TaskRejectedException ex) {
+			leases.end(ApplyRunStore.LEASE, run.getId());
 			store.fail(run.getId(), "Applying was busy and couldn't start.");
 			throw new ServiceUnavailableException("Applying is busy right now. Try again in a minute.");
 		}
@@ -54,6 +60,7 @@ public class ApplyRunService {
 		catch (DataIntegrityViolationException ex) {
 			throw new ConflictException("An apply run is already going for this user.");
 		}
+		leases.begin(ApplyRunStore.LEASE, run.getId());
 		worker.runNow(run.getId());
 		return mapper.toResponse(store.get(run.getId(), userId));
 	}

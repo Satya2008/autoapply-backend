@@ -1,5 +1,6 @@
 package com.naukriradar.core.service;
 
+import java.time.Duration;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
@@ -8,12 +9,14 @@ import java.util.function.BooleanSupplier;
 
 import com.naukriradar.common.exception.ConflictException;
 import com.naukriradar.common.exception.NotFoundException;
+import com.naukriradar.common.exception.ServiceUnavailableException;
 import com.naukriradar.core.config.ApplicationProperties;
 import com.naukriradar.core.dto.response.ScheduledJobResponse;
 import com.naukriradar.core.scheduler.ScheduledJob;
 import com.naukriradar.core.settings.SettingChangedEvent;
 import com.naukriradar.core.settings.SettingDefinitions;
 import com.naukriradar.core.support.FixedSettings;
+import com.naukriradar.core.support.InMemoryLock;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -30,6 +33,8 @@ class SchedulerServiceTest {
 
 	private final BlockingJob job = new BlockingJob();
 
+	private final InMemoryLock lock = new InMemoryLock();
+
 	private SchedulerService scheduler;
 
 	@BeforeEach
@@ -37,7 +42,7 @@ class SchedulerServiceTest {
 		taskScheduler.setPoolSize(2);
 		taskScheduler.initialize();
 		scheduler = new SchedulerService(taskScheduler, List.of(job), settings,
-				new ApplicationProperties(ApplicationProperties.ApplyMode.SIMULATE, ZoneId.of("Asia/Kolkata"), 2, 20), true);
+				new ApplicationProperties(ApplicationProperties.ApplyMode.SIMULATE, ZoneId.of("Asia/Kolkata"), 2, 20), lock, true);
 		scheduler.start();
 	}
 
@@ -111,6 +116,51 @@ class SchedulerServiceTest {
 
 		assertThat(only().lastSuccess()).isFalse();
 		assertThat(only().lastResult()).contains("boom");
+	}
+
+	@Test
+	void aJobRunningOnAnotherInstanceIsNotStartedHere() {
+		lock.takenElsewhere("job:auto-apply");
+
+		assertThatThrownBy(() -> scheduler.runNow("auto-apply")).isInstanceOf(ConflictException.class)
+				.hasMessageContaining("already running");
+		assertThat(job.started.getCount()).isEqualTo(1);
+	}
+
+	@Test
+	void aCronTriggerRunsOnlyOnTheInstanceThatGetsTheLockAndKeepsItAWhile() throws Exception {
+		job.release.countDown();
+		lock.takenElsewhere("job:auto-apply");
+		settings.with(SettingDefinitions.AUTO_APPLY_CRON, "* * * * * *");
+		scheduler.onSettingChanged(new SettingChangedEvent(SettingDefinitions.AUTO_APPLY_CRON));
+
+		Thread.sleep(1500);
+		assertThat(job.started.getCount()).isEqualTo(1);
+
+		lock.freeAll();
+		assertThat(job.started.await(3, TimeUnit.SECONDS)).isTrue();
+		waitUntil(() -> !lock.holds().isEmpty());
+		assertThat(only().lastTrigger()).isEqualTo("schedule");
+		assertThat(lock.holds().get(0)).isEqualTo(SchedulerService.MIN_HOLD);
+	}
+
+	@Test
+	void aManualRunReleasesTheLockAtOnce() throws Exception {
+		job.release.countDown();
+
+		scheduler.runNow("auto-apply");
+		waitUntil(() -> !lock.holds().isEmpty());
+
+		assertThat(lock.holds()).containsExactly(Duration.ZERO);
+		assertThat(lock.isHeld("job:auto-apply")).isFalse();
+	}
+
+	@Test
+	void withRedisDownJobsAreNotStartedRatherThanRunUnguarded() {
+		lock.redisDown(true);
+
+		assertThatThrownBy(() -> scheduler.runNow("auto-apply")).isInstanceOf(ServiceUnavailableException.class);
+		assertThat(job.started.getCount()).isEqualTo(1);
 	}
 
 	@Test

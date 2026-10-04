@@ -38,6 +38,7 @@ class GatewayRoutingTests {
 		registry.add("services.core-api", () -> "http://localhost:" + coreApi.getAddress().getPort());
 		registry.add("services.job-service", () -> "http://localhost:" + jobService.getAddress().getPort());
 		registry.add("services.matching-service", () -> "http://localhost:" + matchingService.getAddress().getPort());
+		registry.add("spring.data.redis.database", () -> "1");
 	}
 
 	@AfterAll
@@ -124,6 +125,20 @@ class GatewayRoutingTests {
 		assertThat(setting.body()).isEqualTo("core-api saw PUT /api/v1/admin/settings/applications.max-attempts as null");
 		assertThat(audit.body()).isEqualTo("core-api saw GET /api/v1/admin/audit as null");
 		assertThat(job.body()).isEqualTo("core-api saw POST /api/v1/admin/scheduler/auto-apply/run as null");
+	}
+
+	@Test
+	void eachServiceHasItsOwnCacheAdminPath() throws Exception {
+		HttpResponse<String> jobs = send(HttpRequest.newBuilder(uri("/api/v1/admin/cache/job-service")));
+		HttpResponse<String> clear = send(HttpRequest.newBuilder(uri("/api/v1/admin/cache/matching-service/match-pages"))
+				.DELETE());
+		HttpResponse<String> core = send(HttpRequest.newBuilder(uri("/api/v1/admin/cache/core-api")));
+
+		assertThat(jobs.body()).isEqualTo("job-service saw GET /api/v1/admin/cache as null");
+		assertThat(clear.body()).isEqualTo("matching-service saw DELETE /api/v1/admin/cache/match-pages as null");
+		assertThat(core.body()).isEqualTo("core-api saw GET /api/v1/admin/cache as null");
+		assertThat(send(HttpRequest.newBuilder(uri("/api/v1/admin/cache"))).statusCode()).isEqualTo(404);
+		assertThat(send(HttpRequest.newBuilder(uri("/api/v1/admin/cache/nope"))).statusCode()).isEqualTo(404);
 	}
 
 	@Test

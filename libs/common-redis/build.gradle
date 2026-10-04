@@ -1,0 +1,13 @@
+plugins {
+	id 'java-library'
+}
+
+description = 'Redis building blocks shared by the servlet services: locks, two-level cache, run leases'
+
+dependencies {
+	api project(':libs:common-web')
+	api 'org.springframework.boot:spring-boot-starter-data-redis'
+	api 'org.springframework.boot:spring-boot-starter-cache'
+	api 'com.github.ben-manes.caffeine:caffeine'
+	testImplementation 'org.springframework.boot:spring-boot-starter-test'
+}

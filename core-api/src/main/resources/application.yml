@@ -7,6 +7,13 @@ server:
 spring:
   application:
     name: core-api
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      # fail fast: a cache or lock call must never hang a request
+      timeout: 2s
+      connect-timeout: 2s
   profiles:
     default: dev
   jpa:
