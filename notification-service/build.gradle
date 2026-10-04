@@ -1,0 +1,20 @@
+plugins {
+	id 'org.springframework.boot'
+}
+
+description = 'notification-service: sends email and Telegram messages, once each'
+
+dependencies {
+	implementation project(':libs:common-web')
+	implementation project(':libs:common-redis')
+	implementation project(':libs:common-resilience')
+	implementation project(':libs:common-events')
+	implementation 'org.springframework.boot:spring-boot-starter-actuator'
+	implementation 'org.springframework.boot:spring-boot-starter-mail'
+	implementation 'org.springframework.boot:spring-boot-starter-restclient'
+	implementation 'com.samskivert:jmustache:1.16'
+	runtimeOnly 'com.mysql:mysql-connector-j'
+	testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
+	testImplementation 'org.wiremock:wiremock-standalone:3.13.2'
+	testImplementation 'com.icegreen:greenmail-junit5:2.1.14'
+}

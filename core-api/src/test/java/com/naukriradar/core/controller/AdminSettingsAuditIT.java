@@ -148,7 +148,7 @@ class AdminSettingsAuditIT {
 	@Test
 	void listCanBeFilteredByCategory() throws Exception {
 		mvc.perform(get(SETTINGS).param("category", "scheduler"))
-				.andExpect(jsonPath("$", hasSize(4)))
+				.andExpect(jsonPath("$", hasSize(6)))
 				.andExpect(jsonPath("$[*].category", not(hasItem("applications"))));
 		mvc.perform(get(SETTINGS)).andExpect(jsonPath("$", hasSize(SettingDefinitions.all().size())));
 	}
@@ -183,7 +183,7 @@ class AdminSettingsAuditIT {
 	@Test
 	void jobsAreListedAndCanBeRunByHand() throws Exception {
 		mvc.perform(get("/api/v1/admin/scheduler"))
-				.andExpect(jsonPath("$[*].name", containsInAnyOrder("auto-apply", "retry-failed")))
+				.andExpect(jsonPath("$[*].name", containsInAnyOrder("auto-apply", "retry-failed", "daily-digest")))
 				.andExpect(jsonPath("$[0].scheduled").value(false));
 
 		mvc.perform(post("/api/v1/admin/scheduler/retry-failed/run").header("X-User-Id", "admin-9"))

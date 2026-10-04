@@ -1,0 +1,25 @@
+spring:
+  kafka:
+    listener:
+      auto-startup: false
+  data:
+    redis:
+      database: 1
+  datasource:
+    url: jdbc:mysql://localhost:3306/naukriradar_notify_test
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:root}
+  mail:
+    host: localhost
+    port: 3025
+
+naukriradar:
+  events:
+    prefix: "test."
+    retries: 1
+    retry-backoff: 200ms
+  resilience:
+    max-attempts: 1
+  notify:
+    telegram-bot-token: test-token
+    telegram-webhook-secret: s3cret

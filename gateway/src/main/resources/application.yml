@@ -5,6 +5,7 @@ services:
   core-api: ${CORE_API_URL:http://localhost:8081}
   job-service: ${JOB_SERVICE_URL:http://localhost:8082}
   matching-service: ${MATCHING_SERVICE_URL:http://localhost:8083}
+  notification-service: ${NOTIFICATION_SERVICE_URL:http://localhost:8085}
 
 spring:
   application:
@@ -53,7 +54,18 @@ spring:
                 - Path=/api/v1/admin/cache/matching-service,/api/v1/admin/cache/matching-service/**
               filters:
                 - RewritePath=/api/v1/admin/cache/matching-service(?<rest>.*), /api/v1/admin/cache$\{rest}
+            # Admin test messages, and the Telegram bot's webhook (checked by its secret header)
+            - id: notification-service
+              uri: ${services.notification-service}
+              predicates:
+                - Path=/api/v1/admin/notifications/**,/api/v1/telegram/webhook
             # Each service's events (dead letters, outbox): /api/v1/admin/events/<service>/...
+            - id: notification-service-events
+              uri: ${services.notification-service}
+              predicates:
+                - Path=/api/v1/admin/events/notification-service/**
+              filters:
+                - RewritePath=/api/v1/admin/events/notification-service(?<rest>.*), /api/v1/admin/events$\{rest}
             - id: core-api-events
               uri: ${services.core-api}
               predicates:

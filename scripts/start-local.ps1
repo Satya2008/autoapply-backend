@@ -1,5 +1,5 @@
 # Starts every service on this machine: builds the jars, checks MySQL and Redis, then runs
-# core-api, job-service, matching-service, apply-worker and the gateway in the background.
+# the services and the gateway in the background.
 # Logs go to logs/<service>.log. Stop them with scripts/stop-local.ps1.
 #
 #   .\scripts\start-local.ps1            # build, then start
@@ -16,6 +16,7 @@ $services = [ordered]@{
 	'job-service'      = 8082
 	'matching-service' = 8083
 	'apply-worker'     = 8084
+	'notification-service' = 8085
 	'gateway'          = 8080
 }
 
@@ -58,7 +59,7 @@ foreach ($name in $services.Keys) {
 }
 
 Write-Host 'Waiting for health checks...'
-$deadline = (Get-Date).AddMinutes(3)
+$deadline = (Get-Date).AddMinutes(6)
 foreach ($entry in $services.GetEnumerator()) {
 	$up = $false
 	while (-not $up -and (Get-Date) -lt $deadline) {

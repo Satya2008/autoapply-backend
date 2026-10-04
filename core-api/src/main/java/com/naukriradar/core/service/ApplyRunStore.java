@@ -35,12 +35,15 @@ public class ApplyRunStore implements InterruptedRunCloser {
 	private final ApplyRunRepository repository;
 	private final RunLeases leases;
 	private final OutboxWriter outbox;
+	private final NotificationRequests notifications;
 	private final Clock clock = Clock.systemUTC();
 
-	public ApplyRunStore(ApplyRunRepository repository, RunLeases leases, OutboxWriter outbox) {
+	public ApplyRunStore(ApplyRunRepository repository, RunLeases leases, OutboxWriter outbox,
+			NotificationRequests notifications) {
 		this.repository = repository;
 		this.leases = leases;
 		this.outbox = outbox;
+		this.notifications = notifications;
 	}
 
 	@Transactional
@@ -69,6 +72,10 @@ public class ApplyRunStore implements InterruptedRunCloser {
 			// announced with the result itself: the live screen and later the notifier hear about it
 			outbox.publish(Topics.APPLY_COMPLETED, run.getUserId(), "ApplyRunCompleted", new ApplyRunCompleted(
 					run.getUserId(), runId, plan.queued().size(), needsYou, outcome.sent(), outcome.failed()));
+			if (outcome.sent() + needsYou > 0) {
+				notifications.request(run.getUserId(), NotificationRequests.Kind.APPLY_UPDATE, "apply-run",
+						Map.of("sent", outcome.sent(), "needsYou", needsYou));
+			}
 		});
 	}
 

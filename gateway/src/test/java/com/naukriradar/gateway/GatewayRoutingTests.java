@@ -28,6 +28,8 @@ class GatewayRoutingTests {
 
 	private static final HttpServer matchingService = startFakeService("matching-service");
 
+	private static final HttpServer notificationService = startFakeService("notification-service");
+
 	private final HttpClient client = HttpClient.newHttpClient();
 
 	@LocalServerPort
@@ -38,6 +40,8 @@ class GatewayRoutingTests {
 		registry.add("services.core-api", () -> "http://localhost:" + coreApi.getAddress().getPort());
 		registry.add("services.job-service", () -> "http://localhost:" + jobService.getAddress().getPort());
 		registry.add("services.matching-service", () -> "http://localhost:" + matchingService.getAddress().getPort());
+		registry.add("services.notification-service",
+				() -> "http://localhost:" + notificationService.getAddress().getPort());
 		registry.add("spring.data.redis.database", () -> "1");
 	}
 
@@ -46,6 +50,7 @@ class GatewayRoutingTests {
 		coreApi.stop(0);
 		jobService.stop(0);
 		matchingService.stop(0);
+		notificationService.stop(0);
 	}
 
 	@Test
@@ -165,6 +170,19 @@ class GatewayRoutingTests {
 		assertThat(dlq.body()).isEqualTo("job-service saw GET /api/v1/admin/events/dlq as null");
 		assertThat(replay.body()).isEqualTo("core-api saw POST /api/v1/admin/events/dlq/abc/replay as null");
 		assertThat(outbox.body()).isEqualTo("matching-service saw GET /api/v1/admin/events/outbox as null");
+	}
+
+	@Test
+	void notificationAdminAndTheTelegramWebhookGoToNotificationService() throws Exception {
+		HttpResponse<String> test = send(HttpRequest.newBuilder(uri("/api/v1/admin/notifications/test"))
+				.POST(HttpRequest.BodyPublishers.ofString("{}")));
+		HttpResponse<String> webhook = send(HttpRequest.newBuilder(uri("/api/v1/telegram/webhook"))
+				.POST(HttpRequest.BodyPublishers.ofString("{}")));
+		HttpResponse<String> prefs = send(HttpRequest.newBuilder(uri("/api/v1/me/notification-preferences")));
+
+		assertThat(test.body()).isEqualTo("notification-service saw POST /api/v1/admin/notifications/test as null");
+		assertThat(webhook.body()).isEqualTo("notification-service saw POST /api/v1/telegram/webhook as null");
+		assertThat(prefs.body()).startsWith("core-api saw GET /api/v1/me/notification-preferences");
 	}
 
 	@Test

@@ -26,6 +26,8 @@ public final class SettingDefinitions {
 	public static final String RETRY_FAILED_CRON = "scheduler.retry-failed.cron";
 	public static final String RETRY_FAILED_ENABLED = "scheduler.retry-failed.enabled";
 	public static final String AI_API_KEY = "ai.api-key";
+	public static final String DIGEST_CRON = "scheduler.daily-digest.cron";
+	public static final String DIGEST_ENABLED = "scheduler.daily-digest.enabled";
 
 	private static final List<SettingDefinition> ALL = List.of(
 			of(HIGH_RISK_DOMAINS, "applications", SettingType.DOMAIN_LIST,
@@ -53,6 +55,10 @@ public final class SettingDefinitions {
 					"When to retry failed automatic applications whose wait is over."),
 			of(RETRY_FAILED_ENABLED, "scheduler", SettingType.BOOLEAN, "true",
 					"Run the retry task on its schedule."),
+			of(DIGEST_CRON, "scheduler", SettingType.CRON, "0 0 9 * * *",
+					"When to send each user their daily digest (India time)."),
+			of(DIGEST_ENABLED, "scheduler", SettingType.BOOLEAN, "true",
+					"Send the daily digest on its schedule."),
 			of(AI_API_KEY, "ai", SettingType.SECRET, "",
 					"API key for the AI provider (used from Phase 11). Stored encrypted, never shown."));
 

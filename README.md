@@ -23,7 +23,7 @@ client ──► gateway :8080 ─┬─► core-api         :8081 ──► MyS
 | `job-service` | 8082 | Job boards as configuration; fetching, cleaning and storing jobs | ✅ |
 | `matching-service` | 8083 | Scoring jobs against a profile, keeping the best matches | ✅ |
 | `apply-worker` | 8084 | Fills and submits application forms in headless Chrome, for low-risk portals | ✅ |
-| `notification-service` | 8085 | Email, Telegram, daily digest | Phase 16 |
+| `notification-service` | 8085 | Email and Telegram messages, each sent once | ✅ |
 | `libs/common-web` | — | Shared Problem Details errors and the `X-User-Id` caller lookup | ✅ |
 
 ## Tech stack
@@ -421,6 +421,27 @@ QUEUED --dispatch--> SENDING --Redis delay queue, 3-8 min apart per user--> appl
 - Applications of one user go out in order (the topic is keyed by user) and paced: a Redis
   sorted set holds each one until its slot, instead of a thread sleeping.
 
+### Notifications (notification-service)
+
+| Endpoint | What it does |
+|---|---|
+| `GET/PUT /api/v1/me/notification-preferences` | Email, Telegram, daily digest, apply-run updates on or off |
+| `POST /api/v1/me/telegram/link` | A one-time code; send `/start CODE` to the bot to link the chat |
+| `POST /api/v1/admin/notifications/test` | Send a test email or Telegram message now |
+| `POST /api/v1/telegram/webhook` | Telegram's updates for the bot; refused without the webhook secret |
+
+- core-api knows the users, so it decides who gets a message and where (preferences,
+  addresses) and puts `notify.requested` in its outbox. notification-service only renders
+  the Mustache template and sends it on each channel: the fan-out.
+- Each (event, channel) is logged: a repeated event sends nothing, and if email failed but
+  Telegram worked, a retry sends only the email.
+- SMTP down: the event is retried, then kept in the dead letters with the error; a replay
+  after SMTP is back sends what's missing. Nothing upstream waits on any of this.
+- The daily digest (09:00, a runtime setting) uses real numbers: sent in the last 24 hours,
+  waiting for the user, new picks, the top three waiting. Users with nothing new get nothing.
+- Email needs `SMTP_HOST`/`SMTP_PORT` (and credentials); Telegram needs `TELEGRAM_BOT_TOKEN` and
+  `TELEGRAM_WEBHOOK_SECRET`. Without them those channels are simply off.
+
 Errors come back as [Problem Details](https://www.rfc-editor.org/rfc/rfc9457)
 (`application/problem+json`), with field errors under `errors`.
 
@@ -452,7 +473,8 @@ tests route to a fake service, so they need no database. Tests need Redis runnin
 - [x] Phase 13: object storage (S3-compatible), presigned upload and download, migration
 - [x] Phase 14: Kafka events with transactional outbox, idempotent consumers, dead letters, SSE
 - [x] Phase 15: apply-worker, applying in headless Chrome with pacing and crash-safe attempts
+- [x] Phase 16: notification-service, email and Telegram with per-channel dedup and a real daily digest
 - [ ] Phase 9: Docker, Flyway, Testcontainers
-- [ ] Phases 16–19
+- [ ] Phases 17–19
 - [ ] Phase 8, last: security (JWT at the gateway, roles, Google sign-in). Nothing is
       deployed publicly before it.

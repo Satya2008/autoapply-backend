@@ -1,0 +1,9 @@
+<p>Hi {{name}},</p>
+<p>In the last 24 hours:</p>
+<ul>
+  <li><b>{{submitted}}</b> applications sent for you</li>
+  <li><b>{{needsYou}}</b> applications waiting for your click</li>
+  <li><b>{{newApplications}}</b> new jobs picked for you</li>
+</ul>
+{{#hasWaiting}}<p>Waiting for you:</p><ul>{{#topWaiting}}<li>{{title}} at {{company}}</li>{{/topWaiting}}</ul>{{/hasWaiting}}
+<p>— NaukriRadar</p>
