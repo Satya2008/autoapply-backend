@@ -34,6 +34,7 @@ client ──► gateway :8080 ─┬─► core-api         :8081 ──► MyS
 - Apache PDFBox and POI for reading resumes
 - RestClient and JsonPath for job boards; WireMock in tests
 - Virtual threads for parallel fetching, MySQL FULLTEXT search, keyset pagination
+- Redis: shared locks, a two-level cache (Caffeine + Redis), pub/sub, rate limits; ShedLock
 
 ## Run locally
 
@@ -49,6 +50,9 @@ client ──► gateway :8080 ─┬─► core-api         :8081 ──► MyS
    ```
 
    Credentials default to `root` / `root`; override with `DB_USERNAME` and `DB_PASSWORD`.
+
+   Start Redis on `localhost:6379` too (override with `REDIS_HOST` / `REDIS_PORT`). Tests
+   use its database 1.
 
 2. Start each service in its own terminal:
 
@@ -215,6 +219,35 @@ apply to a job twice.
   `retry-failed` (every 30 minutes) retries failed automatic applications. Changing a
   job's cron moves it straight away.
 
+### Redis: running more than one instance
+
+Every service can run as several instances behind the gateway.
+
+| Endpoint | What it does |
+|---|---|
+| `GET /api/v1/admin/cache/{service}` | That service's caches: hits in memory, hits in Redis, misses, average load time |
+| `DELETE /api/v1/admin/cache/{service}/{cache}` | Empty one cache everywhere |
+
+- **Locks**: `SET NX PX` with a random token; release and renewal are Lua scripts that only
+  touch our own token. A watchdog renews held locks, so long work keeps its lock and a
+  crashed holder frees it within one lease. One fetch run, one fetch per board and one run
+  of each core-api job at a time, across all instances.
+- **Run leases**: a run being worked on holds a lease. Each instance sweeps every two
+  minutes and closes runs left RUNNING without one, so a crash no longer needs a restart
+  to clean up, and a restart no longer closes another instance's live runs.
+- **Two-level cache**: memory (30 s) then Redis (10 min) then the database, for job details
+  and match pages. Evictions go to every instance over pub/sub. Concurrent misses for one
+  key load once (stampede guard). If Redis is down the cache just misses.
+  Measured on two job-service instances: database 15.8 ms, Redis hit 8.4 ms, memory 4.5 ms.
+- **Settings**: a change is announced over Redis; every core-api instance drops it from its
+  cache and moves its cron jobs. Only the key is sent, never the value.
+- **Cron jobs**: job-service uses ShedLock; core-api's jobs (whose cron is a setting) use the
+  lock above and keep it at least 30 s, so instances with slightly different clocks don't
+  run the same trigger twice.
+- **Rate limits** at the gateway: a token bucket in Lua, per user (or IP), using Redis' own
+  clock. Runs: 3 then one per 10 minutes; resume upload: 5 per minute; everything else: 120
+  then 2 per second. Refusals are `429` with `Retry-After`. If Redis is down, requests pass.
+
 Errors come back as [Problem Details](https://www.rfc-editor.org/rfc/rfc9457)
 (`application/problem+json`), with field errors under `errors`.
 
@@ -227,7 +260,7 @@ Errors come back as [Problem Details](https://www.rfc-editor.org/rfc/rfc9457)
 
 Each service tests against its own `*_test` database, recreated on every run. job-service
 uses WireMock in place of real job boards. The gateway's
-tests route to a fake service, so they need no database.
+tests route to a fake service, so they need no database. Tests need Redis running.
 
 ## Roadmap
 
@@ -240,4 +273,8 @@ tests route to a fake service, so they need no database.
 - [x] Phase 5: matching-service, scoring jobs against a profile
 - [x] Phase 6: applications, with risk checks and a "needs your click" queue (simulate mode)
 - [x] Phase 7: runtime settings, encrypted secrets, audit log, schedulable jobs
-- [ ] Phase 8: security (JWT at the gateway, roles, Google sign-in)
+- [x] Phase 10: Redis (locks, two-level cache, rate limits, settings sync, ShedLock)
+- [ ] Phase 9: Docker, Flyway, Testcontainers
+- [ ] Phases 11–19
+- [ ] Phase 8, last: security (JWT at the gateway, roles, Google sign-in). Nothing is
+      deployed publicly before it.
