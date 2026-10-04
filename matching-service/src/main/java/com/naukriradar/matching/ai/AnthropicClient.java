@@ -3,7 +3,7 @@ package com.naukriradar.matching.ai;
 import java.util.List;
 import java.util.Map;
 
-import com.naukriradar.matching.config.AiProperties;
+import com.naukriradar.matching.model.AiProviderType;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -19,12 +19,12 @@ public class AnthropicClient extends HttpAiClient {
 	}
 
 	@Override
-	public AiProperties.ProviderType type() {
-		return AiProperties.ProviderType.ANTHROPIC;
+	public AiProviderType type() {
+		return AiProviderType.ANTHROPIC;
 	}
 
 	@Override
-	public AiCompletion complete(AiProperties.Provider provider, String model, AiRequest request) {
+	public AiCompletion complete(ProviderConnection provider, String model, AiRequest request) {
 		Map<String, Object> body = Map.of(
 				"model", model,
 				"max_tokens", request.maxTokens(),
@@ -52,6 +52,17 @@ public class AnthropicClient extends HttpAiClient {
 		}
 		JsonNode usage = reply.path("usage");
 		return new AiCompletion(text.toString(), usage.path("input_tokens").asLong(), usage.path("output_tokens").asLong());
+	}
+
+	@Override
+	public List<String> listModels(ProviderConnection provider) {
+		JsonNode reply = client(provider).get()
+				.uri("/v1/models?limit=1000")
+				.header("x-api-key", provider.apiKey())
+				.header("anthropic-version", "2023-06-01")
+				.retrieve()
+				.body(JsonNode.class);
+		return ids(reply == null ? null : reply.path("data"), "id");
 	}
 
 }

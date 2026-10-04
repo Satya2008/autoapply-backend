@@ -1,4 +1,4 @@
-package com.naukriradar.core.service;
+package com.naukriradar.common.crypto;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -11,24 +11,22 @@ import javax.crypto.SecretKey;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Service;
-
 /**
- * Encrypts secret settings with AES-256-GCM before they reach the database.
+ * Encrypts secrets (secret settings, API keys) with AES-256-GCM before they reach the
+ * database. Registered in every service that sets {@code naukriradar.security.encryption-key}.
  *
  * <ul>
  * <li>A fresh random 12-byte IV for every encryption. Reusing an IV with the same key in GCM
  * leaks the XOR of two plaintexts and lets an attacker forge messages.</li>
- * <li>The setting key is bound in as associated data, so an encrypted value copied from one
- * setting into another fails to decrypt instead of quietly being accepted.</li>
+ * <li>What the secret belongs to (a setting key, a provider name) is bound in as associated
+ * data, so an encrypted value copied from one row into another fails to decrypt instead of
+ * quietly being accepted.</li>
  * <li>The 256-bit key comes from configuration (an environment variable in production). The
  * service won't start without a valid one.</li>
  * </ul>
  *
  * Stored form: {@code v1:} + base64(iv + ciphertext + tag).
  */
-@Service
 public class CryptoService {
 
 	private static final String PREFIX = "v1:";
@@ -38,7 +36,7 @@ public class CryptoService {
 	private final SecretKey key;
 	private final SecureRandom random = new SecureRandom();
 
-	public CryptoService(@Value("${naukriradar.security.encryption-key:}") String base64Key) {
+	public CryptoService(String base64Key) {
 		byte[] bytes;
 		try {
 			bytes = Base64.getDecoder().decode(base64Key.strip());

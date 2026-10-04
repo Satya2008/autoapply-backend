@@ -262,6 +262,14 @@ Every service can run as several instances behind the gateway.
 | Endpoint | What it does |
 |---|---|
 | `GET /api/v1/admin/resilience/{service}` | Each dependency of that service: circuit state, recent failures, free slots |
+| `GET /api/v1/admin/ai/provider-types` | Kinds of provider that can be added, with usual address and example models |
+| `GET /api/v1/admin/ai/providers` | Providers in the order they are tried; the first is the primary |
+| `POST /api/v1/admin/ai/providers` | Add one: name, type, key, model, optional base URL and prices |
+| `PATCH /api/v1/admin/ai/providers/{name}` | Change key, model, address, prices; switch on or off |
+| `DELETE /api/v1/admin/ai/providers/{name}` | Remove one |
+| `POST /api/v1/admin/ai/providers/{name}/primary` | Use it first; the rest become fallbacks |
+| `PUT /api/v1/admin/ai/providers/order` | Set the whole fallback order |
+| `GET /api/v1/admin/ai/providers/{name}/models` | The models that account can use, from the vendor |
 | `GET /api/v1/admin/prompts` | Every prompt version |
 | `POST /api/v1/admin/prompts/{code}/versions` | Add a version (inactive, except a prompt's first) |
 | `POST /api/v1/admin/prompts/{code}/versions/{v}/activate` | Use that version; activating an old one is the rollback |
@@ -271,10 +279,14 @@ Every service can run as several instances behind the gateway.
 - Every call to a job board, another service or an AI provider goes through
   retry(circuit breaker(bulkhead(call))). Only transient failures (5xx, 429, network) are
   retried, with exponential backoff and jitter; an open circuit fails at once.
-- AI lives in matching-service. Providers are configured accounts (`type`, URL, key from an
-  environment variable: `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, or
-  `OLLAMA_URL` for a local Ollama). Each purpose has a route of `provider:model` entries
-  tried in order; providers without a key are skipped, so the app runs with no AI at all.
+- AI lives in matching-service and is not tied to any vendor or model. Providers are added
+  and chosen at runtime through the API above: Anthropic, OpenAI, Gemini, Ollama, and any
+  OpenAI-compatible service (Groq, OpenRouter, DeepSeek, Together...) by giving its base URL.
+  The model is free text. Ready providers are tried in order until one answers; a change
+  applies from the next call. Keys are encrypted (AES-GCM) and never returned, only their
+  last four characters. On the very first start, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`,
+  `GEMINI_API_KEY` or `OLLAMA_URL`, if set, are added as providers. With none, the app runs
+  without AI.
 - Prompts are versioned in the database, with the JSON Schema their answer must match.
   Answers are checked against it: out-of-range numbers are clamped, wrong shapes rejected
   and the next provider tried.

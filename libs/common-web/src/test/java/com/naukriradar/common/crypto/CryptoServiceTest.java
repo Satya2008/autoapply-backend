@@ -1,4 +1,4 @@
-package com.naukriradar.core.service;
+package com.naukriradar.common.crypto;
 
 import java.util.Base64;
 

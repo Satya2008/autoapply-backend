@@ -4,7 +4,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import com.naukriradar.matching.config.AiProperties;
+import com.naukriradar.matching.model.AiProviderType;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -20,12 +20,12 @@ public class OllamaClient extends HttpAiClient {
 	}
 
 	@Override
-	public AiProperties.ProviderType type() {
-		return AiProperties.ProviderType.OLLAMA;
+	public AiProviderType type() {
+		return AiProviderType.OLLAMA;
 	}
 
 	@Override
-	public AiCompletion complete(AiProperties.Provider provider, String model, AiRequest request) {
+	public AiCompletion complete(ProviderConnection provider, String model, AiRequest request) {
 		Map<String, Object> body = new HashMap<>();
 		body.put("model", model);
 		body.put("stream", false);
@@ -47,6 +47,13 @@ public class OllamaClient extends HttpAiClient {
 		}
 		String text = text(reply.path("message").path("content"), "message");
 		return new AiCompletion(text, reply.path("prompt_eval_count").asLong(), reply.path("eval_count").asLong());
+	}
+
+	/** The models pulled onto this Ollama server. */
+	@Override
+	public List<String> listModels(ProviderConnection provider) {
+		JsonNode reply = client(provider).get().uri("/api/tags").retrieve().body(JsonNode.class);
+		return ids(reply == null ? null : reply.path("models"), "name");
 	}
 
 }

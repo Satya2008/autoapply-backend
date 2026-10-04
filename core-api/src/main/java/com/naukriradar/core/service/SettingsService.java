@@ -8,6 +8,7 @@ import java.util.function.Function;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import com.naukriradar.common.crypto.CryptoService;
 import com.naukriradar.common.exception.BadRequestException;
 import com.naukriradar.common.exception.NotFoundException;
 import com.naukriradar.core.audit.Audited;

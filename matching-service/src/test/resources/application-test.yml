@@ -12,32 +12,9 @@ spring:
       ddl-auto: create-drop
 
 naukriradar:
-  # fake AI providers on a fixed WireMock port (see AiRouterIT)
+  security:
+    encryption-key: 4bGq9vXo2LmT7yRk1PzWc8NdEh3UjAs5FiKt6QwYn0M=
   ai:
-    providers:
-      good:
-        type: anthropic
-        base-url: http://localhost:18093/good
-        api-key: test
-      down:
-        type: anthropic
-        base-url: http://localhost:18093/down
-        api-key: test
-      backup:
-        type: openai
-        base-url: http://localhost:18093/backup
-        api-key: test
-      junk:
-        type: openai
-        base-url: http://localhost:18093/junk
-        api-key: test
-      nokey:
-        type: gemini
-        base-url: http://localhost:18093/nokey
-    routes:
-      default: [nokey:m0, good:model-a]
-      fallback-check: [down:model-a, backup:model-b]
-      junk-check: [junk:model-b]
     prices:
       model-a: { input: 1.00, output: 5.00 }
       model-b: { input: 0.15, output: 0.60 }

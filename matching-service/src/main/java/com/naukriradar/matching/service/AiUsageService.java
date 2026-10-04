@@ -44,14 +44,22 @@ public class AiUsageService {
 		this.properties = properties;
 	}
 
-	/** In micro-dollars: a price per million tokens is exactly micro-dollars per token. */
-	public long cost(String model, long tokensIn, long tokensOut) {
-		AiProperties.Price price = properties.prices().get(model);
-		if (price == null) {
-			return 0;
+	/**
+	 * In micro-dollars: a price per million tokens is exactly micro-dollars per token. The
+	 * provider's own prices win; else the configured price list by model; else free.
+	 */
+	public long cost(AiProviderService.Target target, long tokensIn, long tokensOut) {
+		BigDecimal input = target.inputPrice();
+		BigDecimal output = target.outputPrice();
+		AiProperties.Price listed = properties.prices().get(target.model());
+		if (input == null) {
+			input = listed == null ? BigDecimal.ZERO : listed.input();
 		}
-		return price.input().multiply(BigDecimal.valueOf(tokensIn))
-				.add(price.output().multiply(BigDecimal.valueOf(tokensOut)))
+		if (output == null) {
+			output = listed == null ? BigDecimal.ZERO : listed.output();
+		}
+		return input.multiply(BigDecimal.valueOf(tokensIn))
+				.add(output.multiply(BigDecimal.valueOf(tokensOut)))
 				.setScale(0, RoundingMode.HALF_UP)
 				.longValueExact();
 	}

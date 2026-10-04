@@ -4,3 +4,8 @@ spring:
     url: jdbc:mysql://localhost:3306/naukriradar_matching?useAffectedRows=true
     username: ${DB_USERNAME:root}
     password: ${DB_PASSWORD:root}
+
+naukriradar:
+  security:
+    # Dev only. Production gets its key from NAUKRIRADAR_SECURITY_ENCRYPTION_KEY.
+    encryption-key: Hc7d2rZ0Qy5n8VvJ1kXbLm3pT6wS9aEfGuIoYtRqWzM=

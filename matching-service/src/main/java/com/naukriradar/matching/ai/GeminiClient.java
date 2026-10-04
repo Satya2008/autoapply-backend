@@ -1,10 +1,11 @@
 package com.naukriradar.matching.ai;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import com.naukriradar.matching.config.AiProperties;
+import com.naukriradar.matching.model.AiProviderType;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -20,12 +21,12 @@ public class GeminiClient extends HttpAiClient {
 	}
 
 	@Override
-	public AiProperties.ProviderType type() {
-		return AiProperties.ProviderType.GEMINI;
+	public AiProviderType type() {
+		return AiProviderType.GEMINI;
 	}
 
 	@Override
-	public AiCompletion complete(AiProperties.Provider provider, String model, AiRequest request) {
+	public AiCompletion complete(ProviderConnection provider, String model, AiRequest request) {
 		Map<String, Object> config = new HashMap<>();
 		config.put("maxOutputTokens", request.maxTokens());
 		if (request.outputSchema() != null) {
@@ -48,6 +49,29 @@ public class GeminiClient extends HttpAiClient {
 		String text = text(reply.path("candidates").path(0).path("content").path("parts").path(0).path("text"), "text");
 		JsonNode usage = reply.path("usageMetadata");
 		return new AiCompletion(text, usage.path("promptTokenCount").asLong(), usage.path("candidatesTokenCount").asLong());
+	}
+
+	/** Only models that can generate text; names come as "models/x" and are given back as "x". */
+	@Override
+	public List<String> listModels(ProviderConnection provider) {
+		JsonNode reply = client(provider).get()
+				.uri("/v1beta/models?pageSize=1000")
+				.header("x-goog-api-key", provider.apiKey())
+				.retrieve()
+				.body(JsonNode.class);
+		List<String> models = new ArrayList<>();
+		if (reply != null) {
+			for (JsonNode model : reply.path("models")) {
+				boolean generates = false;
+				for (JsonNode method : model.path("supportedGenerationMethods")) {
+					generates |= "generateContent".equals(method.asString());
+				}
+				if (generates) {
+					models.add(model.path("name").asString().replaceFirst("^models/", ""));
+				}
+			}
+		}
+		return models.stream().sorted().toList();
 	}
 
 }

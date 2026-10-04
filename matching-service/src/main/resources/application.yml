@@ -42,41 +42,37 @@ naukriradar:
     worker-threads: 2
     queue-capacity: 20
 
-  # A provider is used only when it has a key (Ollama needs none, just a running server).
-  # Set the keys as environment variables; never commit them.
+  # Providers are chosen at runtime: /api/v1/admin/ai/providers (add any provider with its
+  # key and model, pick the primary, set the fallback order). The ones below are only added
+  # on the very first start, with keys from environment variables if set.
   ai:
     enabled: true
     daily-budget-usd: 0.50
-    providers:
+    seed-providers:
       anthropic:
         type: anthropic
-        base-url: https://api.anthropic.com
         api-key: ${ANTHROPIC_API_KEY:}
+        model: claude-haiku-4-5-20251001
       openai:
         type: openai
-        base-url: https://api.openai.com
         api-key: ${OPENAI_API_KEY:}
+        model: gpt-4o-mini
       gemini:
         type: gemini
-        base-url: https://generativelanguage.googleapis.com
         api-key: ${GEMINI_API_KEY:}
+        model: gemini-2.0-flash
       ollama:
         type: ollama
         base-url: ${OLLAMA_URL:}
-        timeout: 120s
-    # tried in order until one answers; a purpose not listed uses "default"
-    routes:
-      default:
-        - anthropic:claude-haiku-4-5-20251001
-        - openai:gpt-4o-mini
-        - gemini:gemini-2.0-flash
-        - ollama:llama3.2
-    # USD per million tokens; check the vendors' current price lists
+        model: llama3.2
+    # USD per million tokens, for providers that don't set their own; check vendor prices
     prices:
       "[claude-haiku-4-5-20251001]": { input: 1.00, output: 5.00 }
       "[gpt-4o-mini]": { input: 0.15, output: 0.60 }
       "[gemini-2.0-flash]": { input: 0.10, output: 0.40 }
-      "[llama3.2]": { input: 0, output: 0 }
+  security:
+    # encrypts provider API keys at rest; 32 random bytes, base64
+    encryption-key: ${NAUKRIRADAR_SECURITY_ENCRYPTION_KEY:}
 
 management:
   endpoints:

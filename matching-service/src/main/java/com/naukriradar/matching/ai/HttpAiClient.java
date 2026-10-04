@@ -2,10 +2,11 @@ package com.naukriradar.matching.ai;
 
 import java.net.http.HttpClient;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-import com.naukriradar.matching.config.AiProperties;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 import tools.jackson.databind.JsonNode;
@@ -23,7 +24,7 @@ abstract class HttpAiClient implements AiClient {
 		this.json = json;
 	}
 
-	protected RestClient client(AiProperties.Provider provider) {
+	protected RestClient client(ProviderConnection provider) {
 		return clients.computeIfAbsent(provider.baseUrl() + "|" + provider.timeout(), key -> {
 			// HTTP/1.1: on plain http the JDK client would try an h2c upgrade, which some servers drop
 			HttpClient http = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1)
@@ -43,6 +44,20 @@ abstract class HttpAiClient implements AiClient {
 		return (system.isBlank() ? "" : system + "\n\n")
 				+ "Reply with one JSON object only, no prose and no code fences, matching this JSON Schema:\n"
 				+ json.writeValueAsString(request.outputSchema());
+	}
+
+	/** The given field of every element, sorted: how vendors list their models. */
+	protected static List<String> ids(JsonNode array, String field) {
+		List<String> ids = new ArrayList<>();
+		if (array != null) {
+			for (JsonNode element : array) {
+				String id = element.path(field).asString();
+				if (id != null && !id.isBlank()) {
+					ids.add(id);
+				}
+			}
+		}
+		return ids.stream().sorted().toList();
 	}
 
 	protected static String text(JsonNode node, String what) {
