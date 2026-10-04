@@ -35,41 +35,16 @@ naukriradar:
     # SIMULATE records applications but never sends one. BROWSER arrives in Phase 15.
     mode: SIMULATE
     zone: Asia/Kolkata
-    match-limit: 200
-    max-needs-you-per-run: 50
-    max-attempts: 3
-    retry-delay: 30m
     worker-threads: 2
     queue-capacity: 20
-    # Sites that ban automated applications. Applying there by bot can get the candidate's
-    # account blocked, so these always wait for the candidate. Subdomains are included.
-    high-risk-domains:
-      - linkedin.com
-      - naukri.com
-      - indeed.com
-      - glassdoor.com
-      - monster.com
-      - foundit.in
-      - instahyre.com
-      - shine.com
-      - timesjobs.com
-      - wellfound.com
-      - myworkdayjobs.com
-      - workday.com
-      - taleo.net
-      - icims.com
-      - successfactors.com
-    # Applicant tracking systems built for direct applications.
-    low-risk-domains:
-      - greenhouse.io
-      - lever.co
-      - workable.com
-      - ashbyhq.com
-      - recruitee.com
-      - smartrecruiters.com
-      - breezy.hr
-      - teamtailor.com
-      - personio.de
+    # Risk lists, limits, retries and schedules are runtime settings: /api/v1/admin/settings
+  security:
+    # 32 random bytes, base64. Encrypts secret settings. No default on purpose: the service
+    # refuses to start without it. Dev and test profiles set throwaway keys.
+    encryption-key: ${NAUKRIRADAR_SECURITY_ENCRYPTION_KEY:}
+  scheduler:
+    # Turn the cron jobs off without touching their settings (tests do).
+    enabled: true
 
 management:
   endpoints:

@@ -19,6 +19,8 @@ import com.naukriradar.core.model.RiskBand;
 import com.naukriradar.core.repository.ApplicationRepository;
 import com.naukriradar.core.repository.PortalConfigRepository;
 import com.naukriradar.core.repository.ProfileRepository;
+import com.naukriradar.core.settings.SettingDefinitions;
+import com.naukriradar.core.settings.Settings;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.json.JsonMapper;
@@ -46,12 +48,13 @@ public class ApplyPlanner {
 	private final PrefillService prefillService;
 	private final ApplicationStateMachine stateMachine;
 	private final ApplicationProperties properties;
+	private final Settings settings;
 	private final JsonMapper jsonMapper;
 	private final Clock clock = Clock.systemUTC();
 
 	public ApplyPlanner(ProfileRepository profileRepository, ApplicationRepository applicationRepository,
 			PortalConfigRepository portalRepository, RiskClassifier riskClassifier, PrefillService prefillService,
-			ApplicationStateMachine stateMachine, ApplicationProperties properties, JsonMapper jsonMapper) {
+			ApplicationStateMachine stateMachine, ApplicationProperties properties, Settings settings, JsonMapper jsonMapper) {
 		this.profileRepository = profileRepository;
 		this.applicationRepository = applicationRepository;
 		this.portalRepository = portalRepository;
@@ -59,6 +62,7 @@ public class ApplyPlanner {
 		this.prefillService = prefillService;
 		this.stateMachine = stateMachine;
 		this.properties = properties;
+		this.settings = settings;
 		this.jsonMapper = jsonMapper;
 	}
 
@@ -71,6 +75,8 @@ public class ApplyPlanner {
 		Set<String> existing = unique.isEmpty() ? Set.of()
 				: applicationRepository.findJobIds(userId, unique.stream().map(MatchForApply::jobId).toList());
 		List<PortalConfig> portals = portalRepository.findByEnabledTrue();
+		RiskClassifier.Rules rules = riskClassifier.rules();
+		int maxNeedsYou = settings.getInt(SettingDefinitions.MAX_NEEDS_YOU_PER_RUN);
 		Instant startOfDay = LocalDate.now(clock.withZone(properties.zone())).atStartOfDay(properties.zone()).toInstant();
 		long automatedToday = applicationRepository.countByUserIdAndAutomatedTrueAndCreatedAtGreaterThanEqual(userId, startOfDay);
 		String prefill = jsonMapper.writeValueAsString(prefillService.answers(profile));
@@ -89,9 +95,9 @@ public class ApplyPlanner {
 				belowScore++;
 				continue;
 			}
-			RiskClassifier.Risk risk = riskClassifier.classify(match.applyUrl(), portals);
+			RiskClassifier.Risk risk = rules.classify(match.applyUrl(), portals);
 			String reasonForUser = needsYouReason(profile, risk, automatedToday);
-			if (reasonForUser != null && needsYou >= properties.maxNeedsYouPerRun()) {
+			if (reasonForUser != null && needsYou >= maxNeedsYou) {
 				deferred++;
 				continue;
 			}

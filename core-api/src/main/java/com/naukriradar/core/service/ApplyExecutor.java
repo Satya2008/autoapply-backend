@@ -6,7 +6,8 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
-import com.naukriradar.core.config.ApplicationProperties;
+import com.naukriradar.core.settings.SettingDefinitions;
+import com.naukriradar.core.settings.Settings;
 import com.naukriradar.core.engine.ApplyEngineSelector;
 import com.naukriradar.core.engine.ApplyFailedException;
 import com.naukriradar.core.engine.ApplyResult;
@@ -32,16 +33,16 @@ public class ApplyExecutor {
 	private final ApplicationRepository repository;
 	private final ApplicationStateMachine stateMachine;
 	private final ApplyEngineSelector engines;
-	private final ApplicationProperties properties;
+	private final Settings settings;
 	private final TransactionTemplate transaction;
 	private final Clock clock = Clock.systemUTC();
 
 	public ApplyExecutor(ApplicationRepository repository, ApplicationStateMachine stateMachine,
-			ApplyEngineSelector engines, ApplicationProperties properties, PlatformTransactionManager transactionManager) {
+			ApplyEngineSelector engines, Settings settings, PlatformTransactionManager transactionManager) {
 		this.repository = repository;
 		this.stateMachine = stateMachine;
 		this.engines = engines;
-		this.properties = properties;
+		this.settings = settings;
 		this.transaction = new TransactionTemplate(transactionManager);
 	}
 
@@ -92,14 +93,14 @@ public class ApplyExecutor {
 		catch (ApplyFailedException ex) {
 			Instant now = clock.instant();
 			int attempt = application.getAttempts() + 1;
-			if (attempt >= properties.maxAttempts()) {
+			if (attempt >= settings.getInt(SettingDefinitions.MAX_ATTEMPTS)) {
 				application.recordFailure(ex.getMessage(), null);
 				String reason = "Automatic apply failed " + attempt + " times (" + ex.getMessage() + "). Please apply yourself.";
 				stateMachine.move(application, ApplicationStatus.NEEDS_YOU, reason);
 				application.needsYouBecause(reason);
 				return Result.HANDED_OVER;
 			}
-			Duration wait = properties.retryDelay().multipliedBy(1L << (attempt - 1));
+			Duration wait = settings.getDuration(SettingDefinitions.RETRY_DELAY).multipliedBy(1L << (attempt - 1));
 			application.recordFailure(ex.getMessage(), now.plus(wait));
 			stateMachine.move(application, ApplicationStatus.FAILED,
 					"Attempt " + attempt + " failed: " + ex.getMessage() + ". Retrying after " + wait.toMinutes() + " minutes.");

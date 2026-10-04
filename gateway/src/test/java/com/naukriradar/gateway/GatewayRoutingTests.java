@@ -114,6 +114,19 @@ class GatewayRoutingTests {
 	}
 
 	@Test
+	void settingsAuditAndSchedulerGoToCoreApi() throws Exception {
+		HttpResponse<String> setting = send(HttpRequest.newBuilder(uri("/api/v1/admin/settings/applications.max-attempts"))
+				.PUT(HttpRequest.BodyPublishers.ofString("{}")));
+		HttpResponse<String> audit = send(HttpRequest.newBuilder(uri("/api/v1/admin/audit?actor=x")));
+		HttpResponse<String> job = send(HttpRequest.newBuilder(uri("/api/v1/admin/scheduler/auto-apply/run"))
+				.POST(HttpRequest.BodyPublishers.noBody()));
+
+		assertThat(setting.body()).isEqualTo("core-api saw PUT /api/v1/admin/settings/applications.max-attempts as null");
+		assertThat(audit.body()).isEqualTo("core-api saw GET /api/v1/admin/audit as null");
+		assertThat(job.body()).isEqualTo("core-api saw POST /api/v1/admin/scheduler/auto-apply/run as null");
+	}
+
+	@Test
 	void internalEndpointsAreNotExposed() throws Exception {
 		assertThat(send(HttpRequest.newBuilder(uri("/internal/v1/users/x/matching-profile"))).statusCode()).isEqualTo(404);
 		assertThat(send(HttpRequest.newBuilder(uri("/internal/v1/jobs/candidates"))

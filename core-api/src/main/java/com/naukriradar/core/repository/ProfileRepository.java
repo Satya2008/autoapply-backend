@@ -1,5 +1,6 @@
 package com.naukriradar.core.repository;
 
+import java.util.List;
 import java.util.Optional;
 
 import com.naukriradar.core.model.Profile;
@@ -22,5 +23,8 @@ public interface ProfileRepository extends JpaRepository<Profile, String> {
 	@QueryHints(@QueryHint(name = "jakarta.persistence.lock.timeout", value = "10000"))
 	@Query("select p from Profile p join fetch p.user where p.userId = :userId")
 	Optional<Profile> findForUpdate(@Param("userId") String userId);
+
+	@Query("select p.userId from Profile p where p.autoApplyEnabled = true")
+	List<String> findUserIdsWithAutoApply();
 
 }

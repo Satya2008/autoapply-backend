@@ -5,3 +5,8 @@ spring:
     password: ${DB_PASSWORD:root}
   jpa:
     show-sql: true
+
+naukriradar:
+  security:
+    # Dev only. Production gets its key from NAUKRIRADAR_SECURITY_ENCRYPTION_KEY.
+    encryption-key: 73pGQ7gBjNcz4zkPm6YgG6CrI/pdpbvnrvBrfYKr230=

@@ -41,6 +41,23 @@ public class ApplyRunService {
 		return mapper.toResponse(run);
 	}
 
+	/**
+	 * Runs on the calling thread and returns when done. Used by the auto-apply job.
+	 *
+	 * @throws ConflictException if the user already has a run going
+	 */
+	public ApplyRunResponse runNow(String userId) {
+		ApplyRun run;
+		try {
+			run = store.create(userId);
+		}
+		catch (DataIntegrityViolationException ex) {
+			throw new ConflictException("An apply run is already going for this user.");
+		}
+		worker.runNow(run.getId());
+		return mapper.toResponse(store.get(run.getId(), userId));
+	}
+
 	public ApplyRunResponse get(String userId, String runId) {
 		return mapper.toResponse(store.get(runId, userId));
 	}

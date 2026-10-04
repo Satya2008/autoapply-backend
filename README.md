@@ -192,6 +192,29 @@ Statuses follow a fixed set of moves (SKIPPED can never become OFFER), and every
 kept in the timeline. Planning locks the profile row, so two runs for the same user can't
 apply to a job twice.
 
+### Runtime settings, audit log and jobs
+
+| Endpoint | What it does |
+|---|---|
+| `GET /api/v1/admin/settings?category=` | Every setting with its value, default and who last changed it |
+| `PUT /api/v1/admin/settings/{key}` | Change one; validated, used on the next read, no restart |
+| `POST /api/v1/admin/settings/{key}/reset` | Back to the default |
+| `GET /api/v1/admin/audit?actor=&action=&targetType=&cursor=` | Who did what, from where, and whether it worked |
+| `GET /api/v1/admin/scheduler` | Background jobs: schedule, next run, last result |
+| `POST /api/v1/admin/scheduler/{job}/run` | Run a job now |
+
+- Settings cover the risk lists, apply limits and retries, the job schedules, and API keys.
+  Unknown keys and bad values (a cron with five fields, `0` attempts) are refused.
+- Reads are cached with Caffeine; a change clears its entry after it commits.
+- Secret settings are encrypted with AES-256-GCM (fresh IV each time, the setting's key as
+  associated data) and are never returned. The service won't start without
+  `NAUKRIRADAR_SECURITY_ENCRYPTION_KEY` (32 random bytes, base64).
+- Admin actions are audited by an `@Audited` annotation and an aspect; entries are written
+  off the request thread and never contain secret values.
+- Jobs: `auto-apply` (10:00 India time) runs applying for everyone with auto apply on;
+  `retry-failed` (every 30 minutes) retries failed automatic applications. Changing a
+  job's cron moves it straight away.
+
 Errors come back as [Problem Details](https://www.rfc-editor.org/rfc/rfc9457)
 (`application/problem+json`), with field errors under `errors`.
 
@@ -216,4 +239,5 @@ tests route to a fake service, so they need no database.
 - [x] Phase 4: fetch many boards in parallel, de-duplicate across boards, search
 - [x] Phase 5: matching-service, scoring jobs against a profile
 - [x] Phase 6: applications, with risk checks and a "needs your click" queue (simulate mode)
-- [ ] Phase 7: runtime settings and audit log
+- [x] Phase 7: runtime settings, encrypted secrets, audit log, schedulable jobs
+- [ ] Phase 8: security (JWT at the gateway, roles, Google sign-in)

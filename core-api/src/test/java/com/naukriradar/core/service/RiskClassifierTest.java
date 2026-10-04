@@ -1,12 +1,11 @@
 package com.naukriradar.core.service;
 
-import java.time.Duration;
-import java.time.ZoneId;
 import java.util.List;
 
-import com.naukriradar.core.config.ApplicationProperties;
 import com.naukriradar.core.model.PortalConfig;
 import com.naukriradar.core.model.RiskBand;
+import com.naukriradar.core.settings.SettingDefinitions;
+import com.naukriradar.core.support.FixedSettings;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -16,9 +15,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class RiskClassifierTest {
 
-	private final RiskClassifier classifier = new RiskClassifier(new ApplicationProperties(ApplicationProperties.ApplyMode.SIMULATE,
-			ZoneId.of("Asia/Kolkata"), List.of("linkedin.com", "naukri.com", "myworkdayjobs.com"),
-			List.of("greenhouse.io", "lever.co"), 200, 50, 3, Duration.ofMinutes(30), 2, 20));
+	private final RiskClassifier classifier = new RiskClassifier(new FixedSettings()
+			.with(SettingDefinitions.HIGH_RISK_DOMAINS, "linkedin.com, naukri.com, myworkdayjobs.com")
+			.with(SettingDefinitions.LOW_RISK_DOMAINS, "greenhouse.io, lever.co"));
 
 	@ParameterizedTest(name = "{0} -> {1}")
 	@CsvSource({

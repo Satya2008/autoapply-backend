@@ -7,6 +7,7 @@ import java.util.regex.Pattern;
 import com.naukriradar.common.exception.BadRequestException;
 import com.naukriradar.common.exception.ConflictException;
 import com.naukriradar.common.exception.NotFoundException;
+import com.naukriradar.core.audit.Audited;
 import com.naukriradar.core.dto.request.PortalConfigRequest;
 import com.naukriradar.core.dto.response.PortalConfigResponse;
 import com.naukriradar.core.mapper.PortalConfigMapper;
@@ -41,6 +42,8 @@ public class PortalConfigService {
 	}
 
 	@Transactional
+	@Audited(action = "PORTAL_CREATE", targetType = "portal", targetId = "#result.id()",
+			detail = "#request.domain() + ' set to ' + #request.riskBand()")
 	public PortalConfigResponse create(PortalConfigRequest request) {
 		String domain = normaliseDomain(request.domain());
 		if (repository.existsByDomain(domain)) {
@@ -58,6 +61,8 @@ public class PortalConfigService {
 	}
 
 	@Transactional
+	@Audited(action = "PORTAL_UPDATE", targetType = "portal", targetId = "#id",
+			detail = "#request.domain() + ' set to ' + #request.riskBand() + (#request.enabled() ? '' : ', disabled')")
 	public PortalConfigResponse update(String id, PortalConfigRequest request) {
 		PortalConfig portal = load(id);
 		String domain = normaliseDomain(request.domain());
@@ -73,6 +78,7 @@ public class PortalConfigService {
 	}
 
 	@Transactional
+	@Audited(action = "PORTAL_DELETE", targetType = "portal", targetId = "#id")
 	public void delete(String id) {
 		repository.delete(load(id));
 	}

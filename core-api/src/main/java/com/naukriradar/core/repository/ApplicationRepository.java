@@ -25,6 +25,9 @@ public interface ApplicationRepository extends JpaRepository<Application, String
 	List<Application> findByUserIdAndStatusAndNextAttemptAtLessThanEqual(String userId, ApplicationStatus status,
 			Instant now);
 
+	@Query("select distinct a.userId from Application a where a.status = :status and a.nextAttemptAt <= :now")
+	List<String> findUserIdsWithStatusDue(@Param("status") ApplicationStatus status, @Param("now") Instant now);
+
 	/** Newest first; ids are UUIDv7, so id order is creation order. */
 	@Query("select a from Application a where a.userId = :userId and (:status is null or a.status = :status)"
 			+ " order by a.id desc")

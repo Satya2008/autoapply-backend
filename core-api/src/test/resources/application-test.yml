@@ -14,3 +14,8 @@ naukriradar:
     # ApplicationControllerIT runs WireMock on this port in place of matching-service. A fixed
     # port keeps one Spring context for every integration test.
     matching-service-url: http://localhost:18083
+  security:
+    encryption-key: qm/EECDO4DzcKUTPq4yhw2TNC1fGcjzfcFdyxJWoIZ8=
+  scheduler:
+    # cron jobs off in tests; they are triggered by hand where needed
+    enabled: false
