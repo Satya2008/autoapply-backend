@@ -156,6 +156,18 @@ class GatewayRoutingTests {
 	}
 
 	@Test
+	void eachServiceHasItsOwnEventsAdminPath() throws Exception {
+		HttpResponse<String> dlq = send(HttpRequest.newBuilder(uri("/api/v1/admin/events/job-service/dlq?topic=x")));
+		HttpResponse<String> replay = send(HttpRequest.newBuilder(uri("/api/v1/admin/events/core-api/dlq/abc/replay"))
+				.POST(HttpRequest.BodyPublishers.noBody()));
+		HttpResponse<String> outbox = send(HttpRequest.newBuilder(uri("/api/v1/admin/events/matching-service/outbox")));
+
+		assertThat(dlq.body()).isEqualTo("job-service saw GET /api/v1/admin/events/dlq as null");
+		assertThat(replay.body()).isEqualTo("core-api saw POST /api/v1/admin/events/dlq/abc/replay as null");
+		assertThat(outbox.body()).isEqualTo("matching-service saw GET /api/v1/admin/events/outbox as null");
+	}
+
+	@Test
 	void internalEndpointsAreNotExposed() throws Exception {
 		assertThat(send(HttpRequest.newBuilder(uri("/internal/v1/users/x/matching-profile"))).statusCode()).isEqualTo(404);
 		assertThat(send(HttpRequest.newBuilder(uri("/internal/v1/jobs/candidates"))

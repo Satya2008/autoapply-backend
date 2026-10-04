@@ -7,6 +7,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import com.naukriradar.common.events.OutboxWriter;
+import com.naukriradar.common.events.Topics;
 import com.naukriradar.common.exception.NotFoundException;
 import com.naukriradar.common.redis.run.InterruptedRunCloser;
 import com.naukriradar.common.redis.run.RunLeases;
@@ -40,6 +42,7 @@ public class FetchRunService implements InterruptedRunCloser {
 	private final FetchRunRepository repository;
 	private final FetchRunMapper mapper;
 	private final RunLeases leases;
+	private final OutboxWriter outbox;
 
 	@Transactional
 	public String start(RunTrigger trigger, Instant at) {
@@ -51,6 +54,11 @@ public class FetchRunService implements InterruptedRunCloser {
 		FetchRun run = load(runId);
 		results.forEach(result -> run.addSource(mapper.toSource(result)));
 		run.finish(at);
+		int inserted = results.stream().mapToInt(FetchResultResponse::inserted).sum();
+		int updated = results.stream().mapToInt(FetchResultResponse::updated).sum();
+		// in the same transaction as the run's result: both are saved, or neither
+		outbox.publish(Topics.JOBS_INGESTED, runId, "JobsIngested",
+				new JobsIngested(runId, inserted, updated, results.size()));
 	}
 
 	@Transactional
@@ -92,6 +100,10 @@ public class FetchRunService implements InterruptedRunCloser {
 			log.warn("Marked {} interrupted fetch run(s) as failed", abandoned.size());
 		}
 		return abandoned.size();
+	}
+
+	/** Payload of {@link Topics#JOBS_INGESTED}. */
+	public record JobsIngested(String fetchRunId, int newJobs, int updatedJobs, int sources) {
 	}
 
 	private FetchRun load(String runId) {

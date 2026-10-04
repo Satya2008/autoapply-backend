@@ -1,0 +1,12 @@
+plugins {
+	id 'java-library'
+}
+
+description = 'Events between services: transactional outbox, Kafka relay, idempotent consumers, dead letters'
+
+dependencies {
+	api project(':libs:common-redis')
+	api 'org.springframework.boot:spring-boot-starter-kafka'
+	api 'org.springframework.boot:spring-boot-starter-jdbc'
+	testImplementation 'org.springframework.boot:spring-boot-starter-test'
+}

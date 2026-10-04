@@ -34,6 +34,7 @@ function Test-Port([int]$port) {
 
 if (-not (Test-Port 3306)) { throw 'MySQL is not running on localhost:3306.' }
 if (-not (Test-Port 6379)) { throw 'Redis is not running on localhost:6379.' }
+if (-not (Test-Port 9092)) { Write-Warning 'Kafka is not running on localhost:9092: events wait in the outbox until it is (scripts\start-kafka.ps1).' }
 
 $busy = $services.GetEnumerator() | Where-Object { Test-Port $_.Value }
 if ($busy) {

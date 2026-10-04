@@ -1,4 +1,8 @@
 spring:
+  kafka:
+    listener:
+      # several test contexts live at once; only the event tests switch their consumers on
+      auto-startup: false
   data:
     redis:
       # tests keep to their own Redis database
@@ -12,6 +16,9 @@ spring:
       ddl-auto: create-drop
 
 naukriradar:
+  events:
+    # tests never share topics or consumer groups with a development setup
+    prefix: "test."
   security:
     encryption-key: 4bGq9vXo2LmT7yRk1PzWc8NdEh3UjAs5FiKt6QwYn0M=
   ai:

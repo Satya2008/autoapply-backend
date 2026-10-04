@@ -1,4 +1,8 @@
 spring:
+  kafka:
+    listener:
+      # several test contexts live at once; only the event tests switch their consumers on
+      auto-startup: false
   data:
     redis:
       # tests keep to their own Redis database
@@ -13,6 +17,9 @@ spring:
       ddl-auto: create-drop
 
 naukriradar:
+  events:
+    # tests never share topics or consumer groups with a development setup
+    prefix: "test."
   jobs:
     # tests point sources at a local WireMock server
     allow-private-hosts: true

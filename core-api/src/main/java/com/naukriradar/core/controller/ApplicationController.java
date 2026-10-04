@@ -13,12 +13,14 @@ import com.naukriradar.core.dto.response.CoverLetterResponse;
 import com.naukriradar.core.dto.response.NeedsYouResponse;
 import com.naukriradar.core.model.ApplicationStatus;
 import com.naukriradar.core.service.ApplicationService;
+import com.naukriradar.core.service.ApplyProgressStreams;
 import com.naukriradar.core.service.ApplyRunService;
 import com.naukriradar.core.service.CoverLetterService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Size;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -28,6 +30,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 @RestController
 @RequestMapping("/api/v1/me/applications")
@@ -37,13 +40,24 @@ public class ApplicationController {
 	private final ApplyRunService runService;
 	private final ApplicationService applicationService;
 	private final CoverLetterService coverLetters;
+	private final ApplyProgressStreams streams;
 
 	public ApplicationController(CurrentUserProvider currentUser, ApplyRunService runService,
-			ApplicationService applicationService, CoverLetterService coverLetters) {
+			ApplicationService applicationService, CoverLetterService coverLetters, ApplyProgressStreams streams) {
 		this.currentUser = currentUser;
 		this.runService = runService;
 		this.applicationService = applicationService;
 		this.coverLetters = coverLetters;
+		this.streams = streams;
+	}
+
+	/**
+	 * A live stream (Server-Sent Events) of this user's apply runs finishing, so the screen
+	 * updates without polling. Events: {@code connected}, {@code apply-run-completed}.
+	 */
+	@GetMapping(path = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+	public SseEmitter stream() {
+		return streams.open(currentUser.currentUserId());
 	}
 
 	/**

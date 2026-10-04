@@ -58,19 +58,17 @@ public class JobFetchOrchestrator {
 	private final FetchRunService runService;
 	private final DistributedLock lock;
 	private final RunLeases leases;
-	private final JobParsingService parsing;
 	private final Clock clock = Clock.systemUTC();
 
 	private final AtomicReference<String> currentRun = new AtomicReference<>();
 
 	public JobFetchOrchestrator(JobSourceRepository sourceRepository, JobIngestService ingestService,
-			FetchRunService runService, DistributedLock lock, RunLeases leases, JobParsingService parsing) {
+			FetchRunService runService, DistributedLock lock, RunLeases leases) {
 		this.sourceRepository = sourceRepository;
 		this.ingestService = ingestService;
 		this.runService = runService;
 		this.lock = lock;
 		this.leases = leases;
-		this.parsing = parsing;
 	}
 
 	/**
@@ -122,9 +120,8 @@ public class JobFetchOrchestrator {
 					.map(s -> new SourceRef(s.getId(), s.getCode(),
 							Duration.ofSeconds((long) s.getTimeoutSeconds() * s.getMaxPages()).plus(DEADLINE_MARGIN)))
 					.toList();
+			// also announces jobs.ingested, which starts the AI parsing round
 			runService.finish(runId, runAll(sources), clock.instant());
-			// new jobs get their AI parse right away rather than at the next scheduled round
-			parsing.parseInBackground();
 		}
 		catch (RuntimeException ex) {
 			log.error("Fetch run {} failed", runId, ex);

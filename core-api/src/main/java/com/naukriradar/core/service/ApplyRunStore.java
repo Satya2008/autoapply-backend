@@ -7,6 +7,8 @@ import java.util.Collection;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import com.naukriradar.common.events.OutboxWriter;
+import com.naukriradar.common.events.Topics;
 import com.naukriradar.common.exception.NotFoundException;
 import com.naukriradar.common.redis.run.InterruptedRunCloser;
 import com.naukriradar.common.redis.run.RunLeases;
@@ -32,11 +34,13 @@ public class ApplyRunStore implements InterruptedRunCloser {
 
 	private final ApplyRunRepository repository;
 	private final RunLeases leases;
+	private final OutboxWriter outbox;
 	private final Clock clock = Clock.systemUTC();
 
-	public ApplyRunStore(ApplyRunRepository repository, RunLeases leases) {
+	public ApplyRunStore(ApplyRunRepository repository, RunLeases leases, OutboxWriter outbox) {
 		this.repository = repository;
 		this.leases = leases;
+		this.outbox = outbox;
 	}
 
 	@Transactional
@@ -58,9 +62,18 @@ public class ApplyRunStore implements InterruptedRunCloser {
 
 	@Transactional
 	public void succeed(String runId, ApplyPlanner.PlanResult plan, ApplyExecutor.Outcome outcome) {
-		repository.findById(runId).ifPresent(run -> run.succeed(plan.considered(), plan.queued().size(),
-				plan.needsYou() + outcome.handedOver(), outcome.sent(), outcome.failed(), plan.alreadyApplied(),
-				plan.belowScore(), plan.deferred(), clock.instant()));
+		repository.findById(runId).ifPresent(run -> {
+			int needsYou = plan.needsYou() + outcome.handedOver();
+			run.succeed(plan.considered(), plan.queued().size(), needsYou, outcome.sent(), outcome.failed(),
+					plan.alreadyApplied(), plan.belowScore(), plan.deferred(), clock.instant());
+			// announced with the result itself: the live screen and later the notifier hear about it
+			outbox.publish(Topics.APPLY_COMPLETED, run.getUserId(), "ApplyRunCompleted", new ApplyRunCompleted(
+					run.getUserId(), runId, plan.queued().size(), needsYou, outcome.sent(), outcome.failed()));
+		});
+	}
+
+	/** Payload of {@link Topics#APPLY_COMPLETED}. */
+	public record ApplyRunCompleted(String userId, String runId, int queued, int needsYou, int sent, int failed) {
 	}
 
 	@Transactional

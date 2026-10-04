@@ -4,9 +4,12 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import com.naukriradar.common.events.OutboxWriter;
+import com.naukriradar.common.events.Topics;
 import com.naukriradar.common.exception.NotFoundException;
 import com.naukriradar.common.redis.run.InterruptedRunCloser;
 import com.naukriradar.common.redis.run.RunLeases;
@@ -32,11 +35,13 @@ public class MatchRunStore implements InterruptedRunCloser {
 
 	private final MatchRunRepository repository;
 	private final RunLeases leases;
+	private final OutboxWriter outbox;
 	private final Clock clock = Clock.systemUTC();
 
-	public MatchRunStore(MatchRunRepository repository, RunLeases leases) {
+	public MatchRunStore(MatchRunRepository repository, RunLeases leases, OutboxWriter outbox) {
 		this.repository = repository;
 		this.leases = leases;
+		this.outbox = outbox;
 	}
 
 	@Transactional
@@ -56,11 +61,25 @@ public class MatchRunStore implements InterruptedRunCloser {
 				.orElseThrow(() -> new NotFoundException("No match run " + runId + "."));
 	}
 
+	/** Also announces match.created, keyed by user so one user's runs stay in order. */
 	@Transactional
 	public void succeed(String runId, MatchEngine.Outcome outcome) {
-		repository.findById(runId).ifPresent(run -> run.succeed(outcome.jobsConsidered(), outcome.excluded(),
-				outcome.created(), outcome.updated(), outcome.belowThreshold(), outcome.aiReviewed(), outcome.aiNote(),
-				clock.instant()));
+		repository.findById(runId).ifPresent(run -> {
+			run.succeed(outcome.jobsConsidered(), outcome.excluded(), outcome.created(), outcome.updated(),
+					outcome.belowThreshold(), outcome.aiReviewed(), outcome.aiNote(), clock.instant());
+			outbox.publish(Topics.MATCH_CREATED, run.getUserId(), "MatchRunCompleted", new MatchRunCompleted(run.getUserId(),
+					runId, outcome.created(), outcome.updated(), outcome.aiReviewed()));
+		});
+	}
+
+	/** Users who ran matching lately: the ones worth rematching when new jobs arrive. */
+	@Transactional(readOnly = true)
+	public List<String> activeUsers(Duration within) {
+		return repository.findUsersWithRunsSince(clock.instant().minus(within));
+	}
+
+	/** Payload of {@link Topics#MATCH_CREATED}. */
+	public record MatchRunCompleted(String userId, String runId, int newMatches, int updatedMatches, int aiReviewed) {
 	}
 
 	@Transactional

@@ -14,6 +14,13 @@ spring:
       # fail fast: a cache or lock call must never hang a request
       timeout: 2s
       connect-timeout: 2s
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: ${spring.application.name}
+      auto-offset-reset: earliest
+    producer:
+      acks: all
   profiles:
     default: dev
   jpa:

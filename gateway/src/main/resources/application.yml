@@ -53,6 +53,25 @@ spring:
                 - Path=/api/v1/admin/cache/matching-service,/api/v1/admin/cache/matching-service/**
               filters:
                 - RewritePath=/api/v1/admin/cache/matching-service(?<rest>.*), /api/v1/admin/cache$\{rest}
+            # Each service's events (dead letters, outbox): /api/v1/admin/events/<service>/...
+            - id: core-api-events
+              uri: ${services.core-api}
+              predicates:
+                - Path=/api/v1/admin/events/core-api/**
+              filters:
+                - RewritePath=/api/v1/admin/events/core-api(?<rest>.*), /api/v1/admin/events$\{rest}
+            - id: job-service-events
+              uri: ${services.job-service}
+              predicates:
+                - Path=/api/v1/admin/events/job-service/**
+              filters:
+                - RewritePath=/api/v1/admin/events/job-service(?<rest>.*), /api/v1/admin/events$\{rest}
+            - id: matching-service-events
+              uri: ${services.matching-service}
+              predicates:
+                - Path=/api/v1/admin/events/matching-service/**
+              filters:
+                - RewritePath=/api/v1/admin/events/matching-service(?<rest>.*), /api/v1/admin/events$\{rest}
             # Each service's dependency health: /api/v1/admin/resilience/<service>.
             - id: core-api-resilience
               uri: ${services.core-api}
