@@ -41,4 +41,11 @@ jobs:
       - uses: gradle/actions/setup-gradle@v5
       # one test database per service; the container only creates the first
       - run: mysql -h 127.0.0.1 -uroot -proot -e "CREATE DATABASE IF NOT EXISTS naukriradar_job_test; CREATE DATABASE IF NOT EXISTS naukriradar_matching_test"
+      # S3-compatible storage for the object storage tests (SeaweedFS, one binary, no container)
+      - name: Start S3 (SeaweedFS)
+        run: |
+          curl -sSL https://github.com/seaweedfs/seaweedfs/releases/download/4.48/linux_amd64.tar.gz | tar xz
+          mkdir -p /tmp/weed
+          ./weed server -dir=/tmp/weed -s3 -s3.port=8333 -s3.config=scripts/seaweedfs-s3.json -volume.port=8380 -master.volumeSizeLimitMB=32 -volume.max=40 -ip=127.0.0.1 > /tmp/weed.log 2>&1 &
+          for i in $(seq 1 60); do curl -s -o /dev/null http://127.0.0.1:8333/ && break; sleep 1; done
       - run: ./gradlew build

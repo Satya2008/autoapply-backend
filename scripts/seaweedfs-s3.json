@@ -1,0 +1,9 @@
+{
+  "identities": [
+    {
+      "name": "naukriradar-dev",
+      "credentials": [{ "accessKey": "test", "secretKey": "test" }],
+      "actions": ["Admin", "Read", "Write", "List", "Tagging"]
+    }
+  ]
+}

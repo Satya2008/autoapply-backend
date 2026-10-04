@@ -28,7 +28,7 @@ spring:
             - id: core-api
               uri: ${services.core-api}
               predicates:
-                - Path=/api/v1/me/**,/api/v1/dev/**,/api/v1/admin/portals,/api/v1/admin/portals/**,/api/v1/admin/settings,/api/v1/admin/settings/**,/api/v1/admin/audit,/api/v1/admin/scheduler,/api/v1/admin/scheduler/**
+                - Path=/api/v1/me/**,/api/v1/dev/**,/api/v1/admin/portals,/api/v1/admin/portals/**,/api/v1/admin/settings,/api/v1/admin/settings/**,/api/v1/admin/audit,/api/v1/admin/scheduler,/api/v1/admin/scheduler/**,/api/v1/admin/storage/**
             - id: job-service
               uri: ${services.job-service}
               predicates:

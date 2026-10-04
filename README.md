@@ -1,4 +1,4 @@
-# NaukriRadar — Backend
+# NaukriRadar â€” Backend
 
 NaukriRadar pulls job postings from job boards, scores each one against a candidate's
 profile, and applies where it is safe to automate. Where it is not (LinkedIn, Naukri,
@@ -10,21 +10,21 @@ Microservices from the start, each in its own Gradle module with its own databas
 one repository.
 
 ```
-client ──► gateway :8080 ─┬─► core-api         :8081 ──► MySQL naukriradar_core
-                          ├─► job-service      :8082 ──► MySQL naukriradar_job ──► job boards
-                          └─► matching-service :8083 ──► MySQL naukriradar_matching
+client â”€â”€â–º gateway :8080 â”€â”¬â”€â–º core-api         :8081 â”€â”€â–º MySQL naukriradar_core
+                          â”œâ”€â–º job-service      :8082 â”€â”€â–º MySQL naukriradar_job â”€â”€â–º job boards
+                          â””â”€â–º matching-service :8083 â”€â”€â–º MySQL naukriradar_matching
                                 (calls core-api and job-service on /internal APIs)
 ```
 
 | Module | Port | What it owns | Status |
 |---|---|---|---|
-| `gateway` | 8080 | The only public entry point. Routes requests, and serves one Swagger UI for all services | ✅ |
-| `core-api` | 8081 | Users, profiles, skills, resumes, applications | ✅ |
-| `job-service` | 8082 | Job boards as configuration; fetching, cleaning and storing jobs | ✅ |
-| `matching-service` | 8083 | Scoring jobs against a profile, keeping the best matches | ✅ |
+| `gateway` | 8080 | The only public entry point. Routes requests, and serves one Swagger UI for all services | âœ… |
+| `core-api` | 8081 | Users, profiles, skills, resumes, applications | âœ… |
+| `job-service` | 8082 | Job boards as configuration; fetching, cleaning and storing jobs | âœ… |
+| `matching-service` | 8083 | Scoring jobs against a profile, keeping the best matches | âœ… |
 | `apply-worker` | 8084 | Browser automation for low-risk portals | Phase 15 |
 | `notification-service` | 8085 | Email, Telegram, daily digest | Phase 16 |
-| `libs/common-web` | — | Shared Problem Details errors and the `X-User-Id` caller lookup | ✅ |
+| `libs/common-web` | â€” | Shared Problem Details errors and the `X-User-Id` caller lookup | âœ… |
 
 ## Tech stack
 
@@ -54,6 +54,15 @@ client ──► gateway :8080 ─┬─► core-api         :8081 ──► MyS
 
    Start Redis on `localhost:6379` too (override with `REDIS_HOST` / `REDIS_PORT`). Tests
    use its database 1.
+
+   Tests also need an S3-compatible store on `localhost:8333` with the key `test`/`test`.
+   [SeaweedFS](https://github.com/seaweedfs/seaweedfs/releases) is a single binary:
+
+   ```bash
+   weed server -dir=./s3data -s3 -s3.port=8333 -s3.config=scripts/seaweedfs-s3.json -volume.port=8380 -volume.max=40
+   ```
+
+   The app itself keeps files on local disk unless `naukriradar.storage.type=S3`.
 
 2. Start everything at once (Windows PowerShell), then walk the main flow:
 
@@ -326,6 +335,25 @@ Every service can run as several instances behind the gateway.
   `POST /internal/v1/ai/run`, so providers, fallback, cache, budgets and cost tracking stay
   in one place.
 
+### File storage
+
+| Endpoint | What it does |
+|---|---|
+| `POST /api/v1/me/resume/upload-url` | A short-lived link to PUT the resume straight into storage |
+| `POST /api/v1/me/resume/confirm` | After that upload: check, parse and save it as the resume |
+| `GET /api/v1/me/resume/file` | With S3, a redirect to a short-lived download link |
+| `GET /api/v1/me/resume/download-url` | The download link itself |
+| `POST /api/v1/admin/storage/migrate` | Copy files from local disk into S3 after switching; safe to rerun |
+
+- `naukriradar.storage.type`: `LOCAL` (disk, one instance) or `S3` (any S3-compatible
+  store: AWS S3, Cloudflare R2, SeaweedFS... set `storage.s3.endpoint`, `bucket`, keys).
+  Container disks are temporary and two instances don't share one, so production uses S3.
+- Presigned links are signed for one key, one method and one content type, and expire in
+  10 minutes. Upload keys live under `uploads/<user>/`; confirming someone else's key is a
+  404. The confirmed file goes through the same checks as a normal upload (real type from
+  its bytes, size, parsing) and the pending upload is deleted.
+- The multipart `POST /api/v1/me/resume` still works with either storage.
+
 Errors come back as [Problem Details](https://www.rfc-editor.org/rfc/rfc9457)
 (`application/problem+json`), with field errors under `errors`.
 
@@ -354,7 +382,8 @@ tests route to a fake service, so they need no database. Tests need Redis runnin
 - [x] Phase 10: Redis (locks, two-level cache, rate limits, settings sync, ShedLock)
 - [x] Phase 11: resilience (retry, circuit breaker, bulkhead) and the AI foundation
 - [x] Phase 12: AI parsing of jobs and resumes, AI review of top matches, cover letters
+- [x] Phase 13: object storage (S3-compatible), presigned upload and download, migration
 - [ ] Phase 9: Docker, Flyway, Testcontainers
-- [ ] Phases 13–19
+- [ ] Phases 14â€“19
 - [ ] Phase 8, last: security (JWT at the gateway, roles, Google sign-in). Nothing is
       deployed publicly before it.

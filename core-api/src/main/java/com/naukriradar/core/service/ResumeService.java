@@ -160,6 +160,15 @@ public class ResumeService {
 		}
 	}
 
+	/** Where the current resume is stored, for a direct download link. */
+	public StoredResume stored(String userId) {
+		Resume resume = readOnlyTransaction.execute(status -> load(userId));
+		return new StoredResume(resume.getStorageKey(), resume.getFileName(), resume.getDocumentType().getContentType());
+	}
+
+	public record StoredResume(String key, String fileName, String contentType) {
+	}
+
 	/** Removes the resume and its file. Skills already on the profile stay; the user owns them now. */
 	public void delete(String userId) {
 		String key = transaction.execute(status -> {
