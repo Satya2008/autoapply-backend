@@ -22,7 +22,7 @@ client ──► gateway :8080 ─┬─► core-api         :8081 ──► MyS
 | `core-api` | 8081 | Users, profiles, skills, resumes, applications | ✅ |
 | `job-service` | 8082 | Job boards as configuration; fetching, cleaning and storing jobs | ✅ |
 | `matching-service` | 8083 | Scoring jobs against a profile, keeping the best matches | ✅ |
-| `apply-worker` | 8084 | Browser automation for low-risk portals | Phase 15 |
+| `apply-worker` | 8084 | Fills and submits application forms in headless Chrome, for low-risk portals | ✅ |
 | `notification-service` | 8085 | Email, Telegram, daily digest | Phase 16 |
 | `libs/common-web` | — | Shared Problem Details errors and the `X-User-Id` caller lookup | ✅ |
 
@@ -388,6 +388,39 @@ fetch run --jobs.ingested--> parse with AI --jobs.parsed--> rematch active users
 - Measured locally: one fetch run reached the user's live screen 20 s later, 16 s of it the
   board fetch itself; nothing was called by hand in between.
 
+### Applying in a browser (apply-worker)
+
+`naukriradar.applications.mode` decides how queued applications are sent:
+
+- `SIMULATE` (the default): nothing reaches any employer; the application is recorded only.
+- `BROWSER`: core-api hands the application to the apply worker, which fills the portal's
+  form in headless Chrome and submits it. Only LOW-risk portals are ever queued, as before.
+
+| Endpoint | What it does |
+|---|---|
+| `POST /api/v1/admin/portals/{id}/dry-run` | Fill a portal's form with clearly fake answers in the worker's browser; press nothing |
+| `GET /internal/v1/portals?domain=` | core-api, for the worker: how to fill a portal's form (not routed by the gateway) |
+
+```
+QUEUED --dispatch--> SENDING --Redis delay queue, 3-8 min apart per user--> apply.requested
+   --> apply-worker: headless Chrome fills and submits --> apply.completed
+   --> SUBMITTED | FAILED (retried later) | NEEDS_YOU (the candidate finishes it)
+```
+
+- A separate service because a browser is heavy (a few hundred MB) and can crash: the worker
+  can be scaled, restarted or killed without core-api noticing; applications wait in Kafka.
+- The worker knows no site. Each portal has selectors set by an admin: form field to CSS
+  selector, plus `submit` and `success` (something that only shows once it went through).
+- One browser at a time by default (`naukriradar.browser.pool-size`); each application gets a
+  fresh Chrome that is closed right after.
+- A field it can't find, or no success check, never becomes "submitted": the application goes
+  to the candidate with the reason. Failed attempts leave a screenshot.
+- Never twice: every attempt is recorded before the browser starts. If the worker dies after
+  pressing submit and the event is delivered again, the worker reports "unknown, please
+  check" instead of submitting a second application.
+- Applications of one user go out in order (the topic is keyed by user) and paced: a Redis
+  sorted set holds each one until its slot, instead of a thread sleeping.
+
 Errors come back as [Problem Details](https://www.rfc-editor.org/rfc/rfc9457)
 (`application/problem+json`), with field errors under `errors`.
 
@@ -418,7 +451,8 @@ tests route to a fake service, so they need no database. Tests need Redis runnin
 - [x] Phase 12: AI parsing of jobs and resumes, AI review of top matches, cover letters
 - [x] Phase 13: object storage (S3-compatible), presigned upload and download, migration
 - [x] Phase 14: Kafka events with transactional outbox, idempotent consumers, dead letters, SSE
+- [x] Phase 15: apply-worker, applying in headless Chrome with pacing and crash-safe attempts
 - [ ] Phase 9: Docker, Flyway, Testcontainers
-- [ ] Phases 15–19
+- [ ] Phases 16–19
 - [ ] Phase 8, last: security (JWT at the gateway, roles, Google sign-in). Nothing is
       deployed publicly before it.

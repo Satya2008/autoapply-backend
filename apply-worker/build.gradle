@@ -1,0 +1,18 @@
+plugins {
+	id 'org.springframework.boot'
+}
+
+description = 'apply-worker: fills and submits application forms in a headless browser'
+
+dependencies {
+	implementation project(':libs:common-web')
+	implementation project(':libs:common-redis')
+	implementation project(':libs:common-resilience')
+	implementation project(':libs:common-events')
+	implementation 'org.springframework.boot:spring-boot-starter-actuator'
+	implementation 'org.springframework.boot:spring-boot-starter-restclient'
+	implementation 'org.seleniumhq.selenium:selenium-java:4.50.0'
+	runtimeOnly 'com.mysql:mysql-connector-j'
+	testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
+	testImplementation 'org.wiremock:wiremock-standalone:3.13.2'
+}

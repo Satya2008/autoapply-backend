@@ -10,7 +10,7 @@ import java.util.Set;
  * SKIPPED to OFFER however the code calls it.
  *
  * <pre>
- * PLANNED ──► QUEUED ──► SIMULATED / SUBMITTED ──► INTERVIEW ──► OFFER
+ * PLANNED ──► QUEUED ──► (SENDING) ──► SIMULATED / SUBMITTED ──► INTERVIEW ──► OFFER
  *    │          │  ▲                 │                  │
  *    │          ▼  │                 ▼                  ▼
  *    │        FAILED ─────────►  NEEDS_YOU ──► APPLIED ─► REJECTED
@@ -25,6 +25,8 @@ public enum ApplicationStatus {
 	PLANNED,
 	/** Waiting for the automatic apply engine. Only ever for LOW-risk portals. */
 	QUEUED,
+	/** Handed to the apply worker (browser mode); its result is on the way. */
+	SENDING,
 	/** The engine ran in simulate mode: nothing reached the employer. */
 	SIMULATED,
 	/** The engine really submitted it. */
@@ -43,7 +45,8 @@ public enum ApplicationStatus {
 
 	private static final Map<ApplicationStatus, Set<ApplicationStatus>> NEXT = Map.ofEntries(
 			Map.entry(PLANNED, EnumSet.of(QUEUED, NEEDS_YOU, SKIPPED)),
-			Map.entry(QUEUED, EnumSet.of(SIMULATED, SUBMITTED, FAILED, NEEDS_YOU, SKIPPED)),
+			Map.entry(QUEUED, EnumSet.of(SENDING, SIMULATED, SUBMITTED, FAILED, NEEDS_YOU, SKIPPED)),
+			Map.entry(SENDING, EnumSet.of(SUBMITTED, FAILED, NEEDS_YOU)),
 			Map.entry(FAILED, EnumSet.of(QUEUED, NEEDS_YOU, SKIPPED)),
 			Map.entry(SIMULATED, EnumSet.of(APPLIED, NEEDS_YOU, SKIPPED)),
 			Map.entry(NEEDS_YOU, EnumSet.of(APPLIED, SKIPPED)),

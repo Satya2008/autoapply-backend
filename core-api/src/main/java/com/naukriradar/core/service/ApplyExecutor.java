@@ -6,14 +6,14 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
-import com.naukriradar.core.settings.SettingDefinitions;
-import com.naukriradar.core.settings.Settings;
 import com.naukriradar.core.engine.ApplyEngineSelector;
 import com.naukriradar.core.engine.ApplyFailedException;
 import com.naukriradar.core.engine.ApplyResult;
 import com.naukriradar.core.model.Application;
 import com.naukriradar.core.model.ApplicationStatus;
 import com.naukriradar.core.repository.ApplicationRepository;
+import com.naukriradar.core.settings.SettingDefinitions;
+import com.naukriradar.core.settings.Settings;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -33,15 +33,18 @@ public class ApplyExecutor {
 	private final ApplicationRepository repository;
 	private final ApplicationStateMachine stateMachine;
 	private final ApplyEngineSelector engines;
+	private final ApplyDispatcher dispatcher;
 	private final Settings settings;
 	private final TransactionTemplate transaction;
 	private final Clock clock = Clock.systemUTC();
 
 	public ApplyExecutor(ApplicationRepository repository, ApplicationStateMachine stateMachine,
-			ApplyEngineSelector engines, Settings settings, PlatformTransactionManager transactionManager) {
+			ApplyEngineSelector engines, ApplyDispatcher dispatcher, Settings settings,
+			PlatformTransactionManager transactionManager) {
 		this.repository = repository;
 		this.stateMachine = stateMachine;
 		this.engines = engines;
+		this.dispatcher = dispatcher;
 		this.settings = settings;
 		this.transaction = new TransactionTemplate(transactionManager);
 	}
@@ -84,6 +87,11 @@ public class ApplyExecutor {
 		if (application == null || application.getStatus() != ApplicationStatus.QUEUED) {
 			return Result.UNCHANGED;
 		}
+		if (engines.worker()) {
+			// browser mode: the worker applies; its result comes back as an event
+			dispatcher.dispatch(application);
+			return Result.SENT;
+		}
 		try {
 			ApplyResult result = engines.engine().apply(application);
 			stateMachine.move(application, result.status(), result.note());
@@ -91,22 +99,32 @@ public class ApplyExecutor {
 			return Result.SENT;
 		}
 		catch (ApplyFailedException ex) {
-			Instant now = clock.instant();
-			int attempt = application.getAttempts() + 1;
-			if (attempt >= settings.getInt(SettingDefinitions.MAX_ATTEMPTS)) {
-				application.recordFailure(ex.getMessage(), null);
-				String reason = "Automatic apply failed " + attempt + " times (" + ex.getMessage() + "). Please apply yourself.";
-				stateMachine.move(application, ApplicationStatus.NEEDS_YOU, reason);
-				application.needsYouBecause(reason);
-				return Result.HANDED_OVER;
-			}
-			Duration wait = settings.getDuration(SettingDefinitions.RETRY_DELAY).multipliedBy(1L << (attempt - 1));
-			application.recordFailure(ex.getMessage(), now.plus(wait));
-			stateMachine.move(application, ApplicationStatus.FAILED,
-					"Attempt " + attempt + " failed: " + ex.getMessage() + ". Retrying after " + wait.toMinutes() + " minutes.");
-			log.info("Application {} failed attempt {}: {}", id, attempt, ex.getMessage());
-			return Result.FAILED;
+			return failed(application, ex.getMessage()) ? Result.HANDED_OVER : Result.FAILED;
 		}
+	}
+
+	/**
+	 * An attempt didn't go through: retry later with a growing delay, or after the last
+	 * attempt hand it to the candidate. Runs in the caller's transaction.
+	 *
+	 * @return true if it was handed to the candidate
+	 */
+	public boolean failed(Application application, String error) {
+		Instant now = clock.instant();
+		int attempt = application.getAttempts() + 1;
+		if (attempt >= settings.getInt(SettingDefinitions.MAX_ATTEMPTS)) {
+			application.recordFailure(error, null);
+			String reason = "Automatic apply failed " + attempt + " times (" + error + "). Please apply yourself.";
+			stateMachine.move(application, ApplicationStatus.NEEDS_YOU, reason);
+			application.needsYouBecause(reason);
+			return true;
+		}
+		Duration wait = settings.getDuration(SettingDefinitions.RETRY_DELAY).multipliedBy(1L << (attempt - 1));
+		application.recordFailure(error, now.plus(wait));
+		stateMachine.move(application, ApplicationStatus.FAILED,
+				"Attempt " + attempt + " failed: " + error + ". Retrying after " + wait.toMinutes() + " minutes.");
+		log.info("Application {} failed attempt {}: {}", application.getId(), attempt, error);
+		return false;
 	}
 
 	private enum Result {

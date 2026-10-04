@@ -1,5 +1,5 @@
 # Starts every service on this machine: builds the jars, checks MySQL and Redis, then runs
-# core-api, job-service, matching-service and the gateway in the background.
+# core-api, job-service, matching-service, apply-worker and the gateway in the background.
 # Logs go to logs/<service>.log. Stop them with scripts/stop-local.ps1.
 #
 #   .\scripts\start-local.ps1            # build, then start
@@ -15,6 +15,7 @@ $services = [ordered]@{
 	'core-api'         = 8081
 	'job-service'      = 8082
 	'matching-service' = 8083
+	'apply-worker'     = 8084
 	'gateway'          = 8080
 }
 

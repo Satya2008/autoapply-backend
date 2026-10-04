@@ -1,6 +1,6 @@
 # Stops the services started by scripts/start-local.ps1.
 
-$names = 'core-api', 'job-service', 'matching-service', 'gateway'
+$names = 'core-api', 'job-service', 'matching-service', 'apply-worker', 'gateway'
 $running = Get-CimInstance Win32_Process -Filter "Name = 'java.exe'" |
 	Where-Object { $cmd = $_.CommandLine; $names | Where-Object { $cmd -match "$_-0\.0\.1-SNAPSHOT\.jar" } }
 

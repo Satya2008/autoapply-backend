@@ -1,5 +1,6 @@
 package com.naukriradar.core.service;
 
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.regex.Pattern;
@@ -34,6 +35,17 @@ public class PortalConfigService {
 	@Transactional(readOnly = true)
 	public List<PortalConfigResponse> list() {
 		return repository.findAllByOrderByDomainAsc().stream().map(mapper::toResponse).toList();
+	}
+
+	/** The most specific enabled portal covering this host ("jobs.lever.co" -> "lever.co"). */
+	@Transactional(readOnly = true)
+	public PortalConfigResponse forHost(String host) {
+		String wanted = host == null ? "" : host.strip().toLowerCase();
+		return repository.findByEnabledTrue().stream()
+				.filter(p -> RiskClassifier.covers(p.getDomain(), wanted))
+				.max(Comparator.comparingInt(p -> p.getDomain().length()))
+				.map(mapper::toResponse)
+				.orElseThrow(() -> new NotFoundException("No portal set up for " + wanted + "."));
 	}
 
 	@Transactional(readOnly = true)

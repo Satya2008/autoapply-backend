@@ -31,7 +31,8 @@ public class ApplyProgressListener {
 			properties = "auto.offset.reset=latest")
 	public void onApplyCompleted(String message) {
 		EventEnvelope event = json.readValue(message, EventEnvelope.class);
-		streams.send(event.key(), "apply-run-completed", event.payload());
+		String name = "ApplicationAttemptFinished".equals(event.type()) ? "application-updated" : "apply-run-completed";
+		streams.send(event.key(), name, event.payload());
 	}
 
 }

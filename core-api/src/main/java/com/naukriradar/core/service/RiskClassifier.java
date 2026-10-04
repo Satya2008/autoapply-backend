@@ -41,7 +41,7 @@ public class RiskClassifier {
 	}
 
 	/** The lower-case host of an http(s) URL, without "www."; null if there is none. */
-	static String host(String url) {
+	public static String host(String url) {
 		if (url == null || url.isBlank()) {
 			return null;
 		}
@@ -58,7 +58,7 @@ public class RiskClassifier {
 		}
 	}
 
-	static boolean covers(String domain, String host) {
+	public static boolean covers(String domain, String host) {
 		return host.equals(domain) || host.endsWith("." + domain);
 	}
 

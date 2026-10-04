@@ -1,0 +1,20 @@
+spring:
+  kafka:
+    listener:
+      # several test contexts live at once; only the event tests switch their consumers on
+      auto-startup: false
+  data:
+    redis:
+      database: 1
+  datasource:
+    url: jdbc:mysql://localhost:3306/naukriradar_apply_test
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:root}
+
+naukriradar:
+  events:
+    prefix: "test."
+  browser:
+    screenshots: build/test-screenshots
+    field-timeout: 2s
+    success-timeout: 5s

@@ -6,8 +6,8 @@ import com.naukriradar.core.config.ApplicationProperties;
 import org.springframework.stereotype.Component;
 
 /**
- * Picks the engine for the configured mode at startup. Asking for a mode with no engine
- * (BROWSER before Phase 15) stops the service, rather than quietly doing something else.
+ * Picks the in-process engine for the configured mode at startup. BROWSER mode has none: the
+ * apply worker does that work (see {@code ApplyDispatcher}).
  */
 @Component
 public class ApplyEngineSelector {
@@ -18,8 +18,15 @@ public class ApplyEngineSelector {
 		this.engine = engines.stream()
 				.filter(e -> e.mode() == properties.mode())
 				.findFirst()
-				.orElseThrow(() -> new IllegalStateException(
-						"No apply engine for naukriradar.applications.mode=" + properties.mode()));
+				.orElse(null);
+		if (engine == null && properties.mode() != ApplicationProperties.ApplyMode.BROWSER) {
+			throw new IllegalStateException("No apply engine for naukriradar.applications.mode=" + properties.mode());
+		}
+	}
+
+	/** True when applications go to the apply worker instead of an in-process engine. */
+	public boolean worker() {
+		return engine == null;
 	}
 
 	public ApplyEngine engine() {

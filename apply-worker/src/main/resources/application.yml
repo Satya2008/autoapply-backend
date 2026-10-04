@@ -1,0 +1,41 @@
+server:
+  port: 8084
+
+spring:
+  application:
+    name: apply-worker
+  datasource:
+    url: jdbc:mysql://localhost:3306/naukriradar_apply
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:root}
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      timeout: 2s
+      connect-timeout: 2s
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: ${spring.application.name}
+      auto-offset-reset: earliest
+      # one form can take a while; don't let Kafka think the worker died meanwhile
+      properties:
+        max.poll.interval.ms: 600000
+        max.poll.records: 1
+    producer:
+      acks: all
+
+naukriradar:
+  services:
+    core-api-url: ${CORE_API_URL:http://localhost:8081}
+  browser:
+    # each Chrome takes a few hundred MB; raise this only with RAM to spare
+    pool-size: 1
+    headless: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
