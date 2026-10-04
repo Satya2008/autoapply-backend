@@ -59,7 +59,8 @@ public class MatchRunStore implements InterruptedRunCloser {
 	@Transactional
 	public void succeed(String runId, MatchEngine.Outcome outcome) {
 		repository.findById(runId).ifPresent(run -> run.succeed(outcome.jobsConsidered(), outcome.excluded(),
-				outcome.created(), outcome.updated(), outcome.belowThreshold(), clock.instant()));
+				outcome.created(), outcome.updated(), outcome.belowThreshold(), outcome.aiReviewed(), outcome.aiNote(),
+				clock.instant()));
 	}
 
 	@Transactional

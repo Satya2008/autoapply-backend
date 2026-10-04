@@ -23,6 +23,8 @@ import org.springframework.cache.annotation.Cacheable;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Searches active jobs, newest first.
@@ -43,10 +45,12 @@ public class JobSearchService {
 			currency, posted_at, sort_at, apply_url""";
 
 	private final NamedParameterJdbcTemplate jdbc;
+	private final JsonMapper json;
 	private final Clock clock = Clock.systemUTC();
 
-	public JobSearchService(NamedParameterJdbcTemplate jdbc) {
+	public JobSearchService(NamedParameterJdbcTemplate jdbc, JsonMapper json) {
 		this.jdbc = jdbc;
+		this.json = json;
 	}
 
 	public JobSearchResponse search(JobSearchRequest request) {
@@ -102,19 +106,31 @@ public class JobSearchService {
 	@Cacheable(cacheNames = CacheConfig.JOB_DETAIL, sync = true)
 	public JobDetailResponse get(String id) {
 		List<JobDetailResponse> found = jdbc.query("SELECT " + COLUMNS
-				+ ", description, status, fetched_at, last_seen_at FROM jobs WHERE id = :id",
+				+ ", description, status, fetched_at, last_seen_at, parsed_json, parsed_at FROM jobs WHERE id = :id",
 				new MapSqlParameterSource("id", id), (rs, n) -> {
 					JobSummaryResponse s = row(rs).summary();
 					return new JobDetailResponse(s.id(), s.sourceCode(), rs.getString("external_id"), s.title(),
 							s.company(), s.location(), s.remote(), s.salaryMin(), s.salaryMax(), s.currency(),
 							s.postedAt(), s.applyUrl(), rs.getString("description"),
 							JobStatus.valueOf(rs.getString("status")), instant(rs, "fetched_at"),
-							instant(rs, "last_seen_at"));
+							instant(rs, "last_seen_at"), requirements(rs.getString("parsed_json")), instant(rs, "parsed_at"));
 				});
 		if (found.isEmpty()) {
 			throw new NotFoundException("No job " + id + ".");
 		}
 		return found.get(0);
+	}
+
+	private JsonNode requirements(String parsedJson) {
+		if (parsedJson == null) {
+			return null;
+		}
+		try {
+			return json.readTree(parsedJson);
+		}
+		catch (RuntimeException ex) {
+			return null;
+		}
 	}
 
 	private static Row row(ResultSet rs) throws SQLException {

@@ -13,6 +13,7 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * @param candidateDays only jobs posted within this many days are considered
  * @param workerThreads match runs that can execute at once
  * @param queueCapacity runs that can wait for a free worker before new ones are refused
+ * @param aiRerankTop how many of the best local matches the AI reviews per run; 0 turns it off
  */
 @ConfigurationProperties("naukriradar.matching")
 public record MatchingProperties(
@@ -21,7 +22,8 @@ public record MatchingProperties(
 		@DefaultValue("300") int candidateLimit,
 		@DefaultValue("60") int candidateDays,
 		@DefaultValue("2") int workerThreads,
-		@DefaultValue("20") int queueCapacity) {
+		@DefaultValue("20") int queueCapacity,
+		@DefaultValue("10") int aiRerankTop) {
 
 	public MatchingProperties {
 		weights = weights == null ? Map.of() : Map.copyOf(weights);

@@ -16,6 +16,7 @@ public record AiProviderUpdateRequest(
 		@Size(max = 255) @URL String baseUrl,
 		@Size(max = 500) String apiKey,
 		@Size(min = 1, max = 100) String model,
+		@Size(max = 100) String strongModel,
 		Boolean enabled,
 		@Min(5) @Max(600) Integer timeoutSeconds,
 		@DecimalMin("0") BigDecimal inputPrice,

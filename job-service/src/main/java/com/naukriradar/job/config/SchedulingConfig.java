@@ -4,6 +4,7 @@ import com.naukriradar.common.exception.ConflictException;
 import com.naukriradar.common.exception.ServiceUnavailableException;
 import com.naukriradar.job.model.RunTrigger;
 import com.naukriradar.job.service.JobFetchOrchestrator;
+import com.naukriradar.job.service.JobParsingService;
 import com.naukriradar.job.service.JobRetentionService;
 import lombok.RequiredArgsConstructor;
 import net.javacrumbs.shedlock.spring.annotation.EnableSchedulerLock;
@@ -33,6 +34,7 @@ public class SchedulingConfig {
 
 	private final JobFetchOrchestrator orchestrator;
 	private final JobRetentionService retention;
+	private final JobParsingService parsing;
 
 	/** Only starts the run; the run itself is guarded by the orchestrator's own lock. */
 	@Scheduled(cron = "${naukriradar.jobs.schedule.fetch-cron:0 0 */6 * * *}")
@@ -44,6 +46,13 @@ public class SchedulingConfig {
 		catch (ConflictException | ServiceUnavailableException ex) {
 			log.info("Scheduled fetch skipped: {}", ex.getMessage());
 		}
+	}
+
+	/** Picks up jobs a round after a fetch didn't reach (batch full, AI down at the time). */
+	@Scheduled(cron = "${naukriradar.jobs.parsing.cron:0 */15 * * * *}")
+	@SchedulerLock(name = "parse-jobs", lockAtLeastFor = "PT1M", lockAtMostFor = "PT30M")
+	void parseJobs() {
+		parsing.parsePending();
 	}
 
 	@Scheduled(cron = "${naukriradar.jobs.schedule.cleanup-cron:0 30 3 * * *}")

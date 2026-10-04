@@ -98,7 +98,7 @@ class AiRouterIT {
 
 	@Test
 	void theTestEndpointUsesThePrimaryAndRecordsTheCost() throws Exception {
-		providers.create(new AiProviderCreateRequest("nokey-" + suffix(), AiProviderType.GEMINI, url("/nokey"), null, "m0",
+		providers.create(new AiProviderCreateRequest("nokey-" + suffix(), AiProviderType.GEMINI, url("/nokey"), null, "m0", null,
 				true, null, null, null), "t");
 		use("good");
 
@@ -122,11 +122,11 @@ class AiRouterIT {
 	@Test
 	void switchingThePrimaryChangesWhoAnswersOnTheNextCall() {
 		use("good", "backup");
-		assertThat(router.run("ai-test", Map.of("topic", "x"), null).provider()).isEqualTo("good");
+		assertThat(router.run("ai-test", Map.of("topic", "x"), null, true).provider()).isEqualTo("good");
 
 		providers.makePrimary("backup", "t");
 
-		assertThat(router.run("ai-test", Map.of("topic", "x"), null).provider()).isEqualTo("backup");
+		assertThat(router.run("ai-test", Map.of("topic", "x"), null, true).provider()).isEqualTo("backup");
 	}
 
 	@Test
@@ -135,7 +135,7 @@ class AiRouterIT {
 		use("down", "backup");
 
 		for (int i = 0; i < 5; i++) {
-			AiResult result = router.run("fallback-check", Map.of(), null);
+			AiResult result = router.run("fallback-check", Map.of(), null, true);
 			assertThat(result.provider()).isEqualTo("backup");
 			assertThat(result.json().get("message").asString()).isEqualTo("Backup here.");
 			assertThat(result.fallbacks()).isEqualTo(1);
@@ -167,8 +167,8 @@ class AiRouterIT {
 	void withNoProviderReadyTheAnswerSaysWhatToDo() {
 		use();
 
-		assertThatThrownBy(() -> router.run("ai-test", Map.of("topic", "x"), null)).isInstanceOf(AiUnavailableException.class)
-				.hasMessageContaining("/api/v1/admin/ai/providers");
+		assertThatThrownBy(() -> router.run("ai-test", Map.of("topic", "x"), null, true))
+				.isInstanceOf(AiUnavailableException.class).hasMessageContaining("/api/v1/admin/ai/providers");
 	}
 
 	@Test
@@ -183,17 +183,31 @@ class AiRouterIT {
 	}
 
 	@Test
+	void theSameQuestionIsPaidForOnce() {
+		use("good");
+		String topic = "cache " + suffix();
+		int before = vendors.findAll(postRequestedFor(urlPathEqualTo("/good/v1/messages"))).size();
+
+		AiResult first = router.run("ai-test", Map.of("topic", topic), null);
+		AiResult second = router.run("ai-test", Map.of("topic", topic), null);
+		router.run("ai-test", Map.of("topic", topic), null, true);
+
+		assertThat(second.json()).isEqualTo(first.json());
+		assertThat(vendors.findAll(postRequestedFor(urlPathEqualTo("/good/v1/messages")))).hasSize(before + 2);
+	}
+
+	@Test
 	void aUserOverTodaysBudgetGetsNoAiCalls() {
 		use("good");
 		String user = UUID.randomUUID().toString();
 		usage.save(new AiUsage(user, "job-fit", "good", "model-a", 1, 1, 600_000, 10, true, Instant.now()));
 		int before = vendors.findAll(postRequestedFor(urlPathEqualTo("/good/v1/messages"))).size();
 
-		assertThatThrownBy(() -> router.run("ai-test", Map.of("topic", "x"), user))
+		assertThatThrownBy(() -> router.run("ai-test", Map.of("topic", "x"), user, true))
 				.isInstanceOf(AiBudgetExceededException.class).hasMessageContaining("budget");
 		assertThat(vendors.findAll(postRequestedFor(urlPathEqualTo("/good/v1/messages")))).hasSize(before);
 
-		assertThat(router.run("ai-test", Map.of("topic", "x"), UUID.randomUUID().toString()).provider()).isEqualTo("good");
+		assertThat(router.run("ai-test", Map.of("topic", "x"), UUID.randomUUID().toString(), true).provider()).isEqualTo("good");
 	}
 
 	@Test
@@ -252,7 +266,7 @@ class AiRouterIT {
 				.andExpect(jsonPath("$", contains("model-a", "model-z")));
 
 		String keyless = "keyless-" + suffix();
-		providers.create(new AiProviderCreateRequest(keyless, AiProviderType.OPENAI, url("/x"), null, "m", true, null, null,
+		providers.create(new AiProviderCreateRequest(keyless, AiProviderType.OPENAI, url("/x"), null, "m", null, true, null, null,
 				null), "t");
 		mvc.perform(adminGet("/api/v1/admin/ai/providers/" + keyless + "/models")).andExpect(status().isServiceUnavailable());
 	}
@@ -286,7 +300,7 @@ class AiRouterIT {
 	/** Adds a fake vendor account once; its key is "key-name-123456". */
 	private void provider(String name, AiProviderType type, String model) {
 		if (!providerRepository.existsByName(name)) {
-			providers.create(new AiProviderCreateRequest(name, type, url("/" + name), "key-" + name + "-123456", model, true,
+			providers.create(new AiProviderCreateRequest(name, type, url("/" + name), "key-" + name + "-123456", model, null, true,
 					null, null, null), "test");
 		}
 	}
@@ -295,7 +309,7 @@ class AiRouterIT {
 	private void use(String... names) {
 		List<String> wanted = List.of(names);
 		providers.list().forEach(p -> providers.update(p.name(),
-				new AiProviderUpdateRequest(null, null, null, wanted.contains(p.name()), null, null, null), "test"));
+				new AiProviderUpdateRequest(null, null, null, null, wanted.contains(p.name()), null, null, null), "test"));
 		if (!wanted.isEmpty()) {
 			providers.reorder(wanted);
 		}

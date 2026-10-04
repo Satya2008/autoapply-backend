@@ -61,7 +61,7 @@ class MatchScorerTest {
 	}
 
 	private static MatchScorer scorer(List<ScoringFactor> factors, Map<String, Integer> weights) {
-		return new MatchScorer(factors, new MatchingProperties(new HashMap<>(weights), 20, 300, 60, 2, 20));
+		return new MatchScorer(factors, new MatchingProperties(new HashMap<>(weights), 20, 300, 60, 2, 20, 10));
 	}
 
 	static List<ScoringFactor> allFactors() {

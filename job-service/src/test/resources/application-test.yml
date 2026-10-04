@@ -19,5 +19,8 @@ naukriradar:
     disable-after-failures: 3
     schedule:
       enabled: false
+    # only JobParsingIT turns this on, against a fake AI
+    parsing:
+      enabled: false
   settings:
     test-api-key: secret-123

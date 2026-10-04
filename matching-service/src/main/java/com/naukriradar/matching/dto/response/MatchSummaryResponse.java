@@ -6,6 +6,7 @@ public record MatchSummaryResponse(
 		String id,
 		String jobId,
 		int score,
+		Integer aiScore,
 		String title,
 		String company,
 		String location,

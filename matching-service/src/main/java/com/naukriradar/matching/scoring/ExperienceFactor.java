@@ -21,7 +21,10 @@ public class ExperienceFactor implements ScoringFactor {
 		if (years == null) {
 			return FactorResult.unknown("No experience on your profile.");
 		}
-		ExperienceParser.Range wanted = ExperienceParser.parse(job.title(), job.description());
+		// the AI-parsed minimum is more reliable than reading numbers out of the text
+		ExperienceParser.Range wanted = job.minYearsExperience() != null
+				? new ExperienceParser.Range(job.minYearsExperience(), null)
+				: ExperienceParser.parse(job.title(), job.description());
 		if (wanted == null) {
 			return FactorResult.unknown("The posting doesn't say how much experience it wants.");
 		}

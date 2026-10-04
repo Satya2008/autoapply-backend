@@ -95,6 +95,13 @@ public class Application {
 	@Column(length = 500)
 	private String lastError;
 
+	/** Written by AI on request; the candidate can regenerate it. */
+	@Column(name = "cover_letter", columnDefinition = "text")
+	private String coverLetter;
+
+	@Column(name = "cover_letter_at")
+	private Instant coverLetterAt;
+
 	@CreationTimestamp
 	@Column(nullable = false, updatable = false)
 	private Instant createdAt;
@@ -157,6 +164,11 @@ public class Application {
 		this.attempts++;
 		this.lastError = error == null || error.length() <= 500 ? error : error.substring(0, 497) + "...";
 		this.nextAttemptAt = retryAt;
+	}
+
+	public void coverLetter(String letter, Instant at) {
+		this.coverLetter = letter;
+		this.coverLetterAt = at;
 	}
 
 }

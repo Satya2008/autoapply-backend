@@ -55,6 +55,9 @@ public class MatchRun {
 	/** Scored under the store threshold; any earlier match for these jobs was removed. */
 	private int belowThreshold;
 
+	@Column(name = "ai_reviewed", nullable = false)
+	private int aiReviewed;
+
 	@Column(length = 500)
 	private String message;
 
@@ -73,14 +76,18 @@ public class MatchRun {
 		this.startedAt = startedAt;
 	}
 
-	public void succeed(int jobsConsidered, int excluded, int created, int updated, int belowThreshold, Instant at) {
+	public void succeed(int jobsConsidered, int excluded, int created, int updated, int belowThreshold, int aiReviewed,
+			String aiNote, Instant at) {
 		this.jobsConsidered = jobsConsidered;
 		this.excluded = excluded;
 		this.matchesCreated = created;
 		this.matchesUpdated = updated;
 		this.belowThreshold = belowThreshold;
+		this.aiReviewed = aiReviewed;
 		this.status = MatchRunStatus.SUCCESS;
-		this.message = "Scored " + jobsConsidered + " jobs: " + created + " new matches, " + updated + " updated.";
+		String message = "Scored " + jobsConsidered + " jobs: " + created + " new matches, " + updated + " updated."
+				+ (aiReviewed > 0 ? " AI reviewed the top " + aiReviewed + "." : "") + (aiNote == null ? "" : " " + aiNote);
+		this.message = message.length() <= 500 ? message : message.substring(0, 497) + "...";
 		finish(at);
 	}
 

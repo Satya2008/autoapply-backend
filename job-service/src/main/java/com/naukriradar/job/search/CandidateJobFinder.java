@@ -7,6 +7,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -21,6 +22,8 @@ import com.naukriradar.job.dto.response.CandidateJobResponse;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Shortlists jobs for a candidate so matching scores a few hundred, not every job. Uses
@@ -38,13 +41,15 @@ public class CandidateJobFinder {
 
 	private static final String COLUMNS = """
 			id, title, company, location, remote, salary_min, salary_max, currency, posted_at, apply_url,
-			SUBSTRING(description, 1, %d) AS description""".formatted(DESCRIPTION_CHARS);
+			SUBSTRING(description, 1, %d) AS description, parsed_json""".formatted(DESCRIPTION_CHARS);
 
 	private final NamedParameterJdbcTemplate jdbc;
+	private final JsonMapper json;
 	private final Clock clock = Clock.systemUTC();
 
-	public CandidateJobFinder(NamedParameterJdbcTemplate jdbc) {
+	public CandidateJobFinder(NamedParameterJdbcTemplate jdbc, JsonMapper json) {
 		this.jdbc = jdbc;
+		this.json = json;
 	}
 
 	public List<CandidateJobResponse> find(CandidateQuery query) {
@@ -80,16 +85,41 @@ public class CandidateJobFinder {
 		return String.join(" ", words);
 	}
 
-	private static CandidateJobResponse row(ResultSet rs) throws SQLException {
+	private CandidateJobResponse row(ResultSet rs) throws SQLException {
 		long salaryMin = rs.getLong("salary_min");
 		boolean noMin = rs.wasNull();
 		long salaryMax = rs.getLong("salary_max");
 		boolean noMax = rs.wasNull();
 		Timestamp posted = rs.getTimestamp("posted_at", Calendar.getInstance(TimeZone.getTimeZone("UTC")));
+		Parsed parsed = parsed(rs.getString("parsed_json"));
 		return new CandidateJobResponse(rs.getString("id"), rs.getString("title"), rs.getString("company"),
 				rs.getString("location"), rs.getBoolean("remote"), noMin ? null : salaryMin, noMax ? null : salaryMax,
 				rs.getString("currency"), posted == null ? null : posted.toInstant(), rs.getString("apply_url"),
-				rs.getString("description"));
+				rs.getString("description"), parsed.requiredSkills(), parsed.minYears(), parsed.seniority());
+	}
+
+	/** The parts of the AI parse that scoring uses; empty when not parsed (or unreadable). */
+	private Parsed parsed(String parsedJson) {
+		if (parsedJson == null) {
+			return Parsed.NONE;
+		}
+		try {
+			JsonNode node = json.readTree(parsedJson);
+			List<String> skills = new ArrayList<>();
+			node.path("requiredSkills").forEach(skill -> skills.add(skill.asString()));
+			JsonNode years = node.path("minYearsExperience");
+			String seniority = node.path("seniority").isString() ? node.path("seniority").asString() : null;
+			return new Parsed(skills, years.isNumber() ? years.asInt() : null,
+					"unknown".equals(seniority) ? null : seniority);
+		}
+		catch (RuntimeException ex) {
+			return Parsed.NONE;
+		}
+	}
+
+	private record Parsed(List<String> requiredSkills, Integer minYears, String seniority) {
+
+		static final Parsed NONE = new Parsed(List.of(), null, null);
 	}
 
 }

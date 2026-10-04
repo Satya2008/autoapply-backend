@@ -24,7 +24,7 @@ class MatchScorerPerformanceTest {
 	@Test
 	void scoresFiveThousandJobsQuickly() {
 		MatchScorer scorer = new MatchScorer(MatchScorerTest.allFactors(),
-				new MatchingProperties(new HashMap<>(MatchScorerTest.defaultWeights()), 20, 300, 60, 2, 20));
+				new MatchingProperties(new HashMap<>(MatchScorerTest.defaultWeights()), 20, 300, 60, 2, 20, 10));
 		MatchContext context = MatchContext.of(profile()
 				.skills("java", "spring boot", "mysql", "kafka", "redis", "docker", "kubernetes", "aws", "rest api",
 						"microservices", "hibernate", "junit", "git", "linux", "c#")

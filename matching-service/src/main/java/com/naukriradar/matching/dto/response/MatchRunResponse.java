@@ -12,6 +12,7 @@ public record MatchRunResponse(
 		int matchesCreated,
 		int matchesUpdated,
 		int belowThreshold,
+		int aiReviewed,
 		String message,
 		Instant startedAt,
 		Instant finishedAt) {

@@ -85,6 +85,21 @@ public class JobMatchWriter {
 				Map.of("userId", userId, "jobIds", jobIds));
 	}
 
+	/** The AI review of one match; local score and the rest stay as they are. */
+	public void saveAiScore(String userId, String jobId, int score, String reasonsJson, String scoredBy, Instant at) {
+		jdbc.update(con -> {
+			PreparedStatement ps = con.prepareStatement("UPDATE job_matches SET ai_score = ?, ai_reasons = ?, ai_scored_by = ?,"
+					+ " ai_scored_at = ? WHERE user_id = ? AND job_id = ?");
+			ps.setInt(1, score);
+			ps.setString(2, reasonsJson);
+			ps.setString(3, truncate(scoredBy, 160));
+			setInstant(ps, 4, at);
+			ps.setString(5, userId);
+			ps.setString(6, jobId);
+			return ps;
+		});
+	}
+
 	private static void bind(PreparedStatement ps, String userId, ScoredJob match, Instant now) throws SQLException {
 		CandidateJob job = match.job();
 		int i = 1;

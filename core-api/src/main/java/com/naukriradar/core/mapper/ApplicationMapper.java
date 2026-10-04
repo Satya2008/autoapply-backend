@@ -41,7 +41,7 @@ public class ApplicationMapper {
 
 	public ApplicationDetailResponse toDetail(Application a, List<ApplicationEvent> events) {
 		return new ApplicationDetailResponse(toSummary(a), a.getRiskReason(), a.getNeedsYouReason(), a.getAttempts(),
-				a.getLastError(), a.getNextAttemptAt(), prefill(a),
+				a.getLastError(), a.getNextAttemptAt(), prefill(a), a.getCoverLetter(),
 				events.stream().map(e -> new ApplicationEventResponse(e.getFromStatus(), e.getToStatus(), e.getNote(), e.getAt()))
 						.toList());
 	}

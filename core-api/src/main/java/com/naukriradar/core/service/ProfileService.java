@@ -114,6 +114,37 @@ public class ProfileService {
 	public record ResumeSkillsUpdate(List<String> added, boolean autoApplyTurnedOff) {
 	}
 
+	/**
+	 * Adds what the AI read from the resume: skills the dictionary missed, years for resume
+	 * skills that had none, and total experience if the profile has none. Skills the
+	 * candidate entered by hand are never touched.
+	 *
+	 * @return the skills added
+	 */
+	@Transactional
+	public List<String> applyAiResumeFacts(String userId, Map<String, Integer> skillYears, Integer totalYears) {
+		Profile profile = load(userId);
+		Map<String, ProfileSkill> skills = profile.getSkills();
+		List<String> added = new ArrayList<>();
+		skillYears.forEach((name, years) -> {
+			ProfileSkill existing = skills.get(name);
+			if (existing == null) {
+				if (skills.size() < MAX_SKILLS) {
+					skills.put(name, new ProfileSkill(years, SkillSource.RESUME));
+					added.add(name);
+				}
+			}
+			else if (existing.getSource() == SkillSource.RESUME && existing.getYears() == null && years != null) {
+				skills.put(name, new ProfileSkill(years, SkillSource.RESUME));
+			}
+		});
+		if (profile.getExperienceYears() == null && totalYears != null) {
+			profile.setExperienceYears(totalYears);
+		}
+		profileRepository.saveAndFlush(profile);
+		return added;
+	}
+
 	private Profile load(String userId) {
 		return profileRepository.findById(userId)
 				.orElseThrow(() -> new NotFoundException("No profile for user " + userId + "."));

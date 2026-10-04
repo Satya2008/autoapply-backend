@@ -9,10 +9,12 @@ import com.naukriradar.core.dto.response.ApplicationDetailResponse;
 import com.naukriradar.core.dto.response.ApplicationPageResponse;
 import com.naukriradar.core.dto.response.ApplicationStatsResponse;
 import com.naukriradar.core.dto.response.ApplyRunResponse;
+import com.naukriradar.core.dto.response.CoverLetterResponse;
 import com.naukriradar.core.dto.response.NeedsYouResponse;
 import com.naukriradar.core.model.ApplicationStatus;
 import com.naukriradar.core.service.ApplicationService;
 import com.naukriradar.core.service.ApplyRunService;
+import com.naukriradar.core.service.CoverLetterService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -34,12 +36,23 @@ public class ApplicationController {
 	private final CurrentUserProvider currentUser;
 	private final ApplyRunService runService;
 	private final ApplicationService applicationService;
+	private final CoverLetterService coverLetters;
 
 	public ApplicationController(CurrentUserProvider currentUser, ApplyRunService runService,
-			ApplicationService applicationService) {
+			ApplicationService applicationService, CoverLetterService coverLetters) {
 		this.currentUser = currentUser;
 		this.runService = runService;
 		this.applicationService = applicationService;
+		this.coverLetters = coverLetters;
+	}
+
+	/**
+	 * Writes a cover letter for this application with AI. The same letter comes back until
+	 * {@code regenerate=true}. 503 when AI can't write right now.
+	 */
+	@PostMapping("/{id}/cover-letter")
+	public CoverLetterResponse coverLetter(@PathVariable String id, @RequestParam(defaultValue = "false") boolean regenerate) {
+		return coverLetters.write(currentUser.currentUserId(), id, regenerate);
 	}
 
 	/**

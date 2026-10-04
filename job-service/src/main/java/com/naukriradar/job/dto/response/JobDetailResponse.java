@@ -2,6 +2,8 @@ package com.naukriradar.job.dto.response;
 
 import java.time.Instant;
 
+import tools.jackson.databind.JsonNode;
+
 import com.naukriradar.job.model.JobStatus;
 
 public record JobDetailResponse(
@@ -20,5 +22,7 @@ public record JobDetailResponse(
 		String description,
 		JobStatus status,
 		Instant fetchedAt,
-		Instant lastSeenAt) {
+		Instant lastSeenAt,
+		JsonNode requirements,
+		Instant parsedAt) {
 }

@@ -50,8 +50,13 @@ public class AiProvider {
 	@Column(name = "api_key_hint", length = 10)
 	private String apiKeyHint;
 
+	/** The everyday model: parsing, scoring. */
 	@Column(nullable = false, length = 100)
 	private String model;
+
+	/** Used for writing (cover letters) when set; else {@link #model}. */
+	@Column(name = "strong_model", length = 100)
+	private String strongModel;
 
 	@Column(nullable = false)
 	private boolean enabled;
@@ -94,6 +99,10 @@ public class AiProvider {
 
 	public void setModel(String model) {
 		this.model = model;
+	}
+
+	public void setStrongModel(String strongModel) {
+		this.strongModel = strongModel;
 	}
 
 	public void setEnabled(boolean enabled) {

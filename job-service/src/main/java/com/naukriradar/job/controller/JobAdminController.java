@@ -2,12 +2,14 @@ package com.naukriradar.job.controller;
 
 import java.net.URI;
 import java.util.List;
+import java.util.Map;
 
 import com.naukriradar.job.dto.response.CleanupResponse;
 import com.naukriradar.job.dto.response.FetchRunResponse;
 import com.naukriradar.job.model.RunTrigger;
 import com.naukriradar.job.service.FetchRunService;
 import com.naukriradar.job.service.JobFetchOrchestrator;
+import com.naukriradar.job.service.JobParsingService;
 import com.naukriradar.job.service.JobRetentionService;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -29,6 +31,7 @@ public class JobAdminController {
 	private final JobFetchOrchestrator orchestrator;
 	private final FetchRunService runService;
 	private final JobRetentionService retentionService;
+	private final JobParsingService parsing;
 
 	/**
 	 * Starts fetching every enabled source and returns at once with 202 and the run. Poll
@@ -53,6 +56,14 @@ public class JobAdminController {
 	}
 
 	/** Closes jobs no board has listed for a week and deletes ones gone for 60 days. */
+	/** Parse every active job again, e.g. after the job-parse prompt improved. Runs in the background. */
+	@PostMapping("/reparse")
+	public ResponseEntity<Map<String, Integer>> reparse() {
+		int queued = parsing.resetAll();
+		parsing.parseInBackground();
+		return ResponseEntity.accepted().body(Map.of("queued", queued));
+	}
+
 	@PostMapping("/cleanup")
 	public CleanupResponse cleanUp() {
 		return retentionService.cleanUp();

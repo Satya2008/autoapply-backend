@@ -9,4 +9,6 @@ public interface ResumeRepository extends JpaRepository<Resume, String> {
 
 	Optional<Resume> findByUserId(String userId);
 
+	boolean existsByUserId(String userId);
+
 }

@@ -42,9 +42,11 @@ public class AiRouter {
 	private final AiUsageService usage;
 	private final AiBudgetGuard budget;
 	private final PromptService prompts;
+	private final AiResultCache cache;
 
 	public AiRouter(AiProperties properties, AiProviderService providers, List<AiClient> clients, Resilience resilience,
-			StructuredOutputValidator validator, AiUsageService usage, AiBudgetGuard budget, PromptService prompts) {
+			StructuredOutputValidator validator, AiUsageService usage, AiBudgetGuard budget, PromptService prompts,
+			AiResultCache cache) {
 		this.properties = properties;
 		this.providers = providers;
 		clients.forEach(client -> this.clients.put(client.type(), client));
@@ -53,15 +55,33 @@ public class AiRouter {
 		this.usage = usage;
 		this.budget = budget;
 		this.prompts = prompts;
+		this.cache = cache;
 	}
 
 	/**
-	 * Runs the active version of a prompt.
+	 * Runs the active version of a prompt. The same question (prompt version and filled-in
+	 * text) is answered from the cache: free, and it doesn't count against the budget.
 	 *
 	 * @throws AiUnavailableException if AI is off, the budget is spent or no provider answered
 	 */
 	public AiResult run(String promptCode, Map<String, String> variables, String userId) {
-		return complete(request(promptCode, variables, userId), providers.targets());
+		return run(promptCode, variables, userId, false);
+	}
+
+	/** @param fresh skip the cache, for "write it again" */
+	public AiResult run(String promptCode, Map<String, String> variables, String userId, boolean fresh) {
+		ActivePrompt prompt = prompts.active(promptCode);
+		AiRequest request = request(prompt, variables, userId);
+		String key = AiResultCache.key(prompt, request);
+		if (!fresh && properties.enabled()) {
+			AiResult cached = cache.get(key);
+			if (cached != null) {
+				return cached;
+			}
+		}
+		AiResult result = complete(request, providers.targets(properties.strongPurposes().contains(promptCode)));
+		cache.put(key, result);
+		return result;
 	}
 
 	/**
@@ -76,7 +96,7 @@ public class AiRouter {
 		if (model != null && !model.isBlank()) {
 			target = new AiProviderService.Target(target.connection(), model.strip(), null, null);
 		}
-		return complete(request(promptCode, variables, null), List.of(target));
+		return complete(request(prompts.active(promptCode), variables, null), List.of(target));
 	}
 
 	/** The models a provider's account can use, straight from the vendor. */
@@ -93,8 +113,8 @@ public class AiRouter {
 		}
 	}
 
-	private AiRequest request(String promptCode, Map<String, String> variables, String userId) {
-		ActivePrompt prompt = prompts.active(promptCode);
+	private AiRequest request(ActivePrompt prompt, Map<String, String> variables, String userId) {
+		String promptCode = prompt.code();
 		String text;
 		try {
 			text = PromptService.render(prompt.template(), variables);

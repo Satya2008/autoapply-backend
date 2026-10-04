@@ -80,6 +80,7 @@ public class AiProviderService {
 			provider.setBaseUrl(trimSlash(request.baseUrl()));
 		}
 		provider.setModel(request.model().strip());
+		provider.setStrongModel(blankToNull(request.strongModel()));
 		provider.setEnabled(request.enabled() == null || request.enabled());
 		if (request.timeoutSeconds() != null) {
 			provider.setTimeoutSeconds(request.timeoutSeconds());
@@ -110,6 +111,9 @@ public class AiProviderService {
 				throw new BadRequestException("model can't be blank.");
 			}
 			provider.setModel(request.model().strip());
+		}
+		if (request.strongModel() != null) {
+			provider.setStrongModel(blankToNull(request.strongModel()));
 		}
 		if (request.enabled() != null) {
 			provider.setEnabled(request.enabled());
@@ -156,12 +160,16 @@ public class AiProviderService {
 		return list();
 	}
 
-	/** Ready providers in the order to try them, with keys decrypted. */
+	/**
+	 * Ready providers in the order to try them, with keys decrypted.
+	 *
+	 * @param strong use each provider's strong model where it has one
+	 */
 	@Transactional(readOnly = true)
-	public List<Target> targets() {
+	public List<Target> targets(boolean strong) {
 		return repository.findAllByOrderByPriorityAscNameAsc().stream()
 				.filter(AiProvider::isReady)
-				.map(this::target)
+				.map(p -> target(p, strong))
 				.flatMap(Optional::stream)
 				.toList();
 	}
@@ -170,7 +178,7 @@ public class AiProviderService {
 	@Transactional(readOnly = true)
 	public Target target(String name) {
 		AiProvider provider = load(name);
-		return target(provider).orElseThrow(() -> new BadRequestException(
+		return target(provider, false).orElseThrow(() -> new BadRequestException(
 				"Provider " + name + "'s key can't be read; set it again."));
 	}
 
@@ -200,7 +208,7 @@ public class AiProviderService {
 		log.info("Added {} AI provider(s) from configuration", properties.seedProviders().size());
 	}
 
-	private Optional<Target> target(AiProvider provider) {
+	private Optional<Target> target(AiProvider provider, boolean strong) {
 		String key = null;
 		if (provider.getApiKey() != null) {
 			try {
@@ -214,7 +222,11 @@ public class AiProviderService {
 		}
 		ProviderConnection connection = new ProviderConnection(provider.getName(), provider.getType(), provider.getBaseUrl(),
 				key, Duration.ofSeconds(provider.getTimeoutSeconds()));
-		return Optional.of(new Target(connection, provider.getModel(), provider.getInputPrice(), provider.getOutputPrice()));
+		String model = strong && provider.getStrongModel() != null ? provider.getStrongModel() : provider.getModel();
+		// the provider's prices are for its everyday model; the strong one is priced from the list
+		boolean ownPrices = model.equals(provider.getModel());
+		return Optional.of(new Target(connection, model, ownPrices ? provider.getInputPrice() : null,
+				ownPrices ? provider.getOutputPrice() : null));
 	}
 
 	private void setKey(AiProvider provider, String apiKey) {
@@ -225,6 +237,10 @@ public class AiProviderService {
 		String key = apiKey.strip();
 		String hint = key.length() > 8 ? "…" + key.substring(key.length() - 4) : "…";
 		provider.setApiKey(crypto.encrypt(key, associatedData(provider.getName())), hint);
+	}
+
+	private static String blankToNull(String value) {
+		return value == null || value.isBlank() ? null : value.strip();
 	}
 
 	private boolean isPrimary(String name) {
@@ -249,7 +265,8 @@ public class AiProviderService {
 	}
 
 	private static AiProviderResponse toResponse(AiProvider p, boolean primary) {
-		return new AiProviderResponse(p.getName(), p.getType(), p.getBaseUrl(), p.getModel(), p.isEnabled(), p.isReady(),
+		return new AiProviderResponse(p.getName(), p.getType(), p.getBaseUrl(), p.getModel(), p.getStrongModel(),
+				p.isEnabled(), p.isReady(),
 				primary, p.getPriority(), p.getApiKey() != null, p.getApiKeyHint(), p.getTimeoutSeconds(), p.getInputPrice(),
 				p.getOutputPrice(), p.getUpdatedAt(), p.getUpdatedBy());
 	}

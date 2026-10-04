@@ -6,6 +6,7 @@ import com.naukriradar.common.security.CurrentUserProvider;
 import com.naukriradar.core.dto.response.ResumeResponse;
 import com.naukriradar.core.dto.response.ResumeUploadResponse;
 import com.naukriradar.core.service.ResumeFile;
+import com.naukriradar.core.service.ResumeParsingService;
 import com.naukriradar.core.service.ResumeService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.InputStreamResource;
@@ -30,11 +31,19 @@ public class ResumeController {
 
 	private final CurrentUserProvider currentUser;
 	private final ResumeService resumeService;
+	private final ResumeParsingService resumeParsing;
 
 	/** Uploads or replaces the resume and returns the skills found in it. */
 	@PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
 	public ResumeUploadResponse upload(@RequestPart("file") MultipartFile file) {
 		return resumeService.upload(currentUser.currentUserId(), file);
+	}
+
+	/** Reads the current resume with AI again (e.g. after the prompt improved). Runs in the background. */
+	@PostMapping("/parse")
+	@ResponseStatus(HttpStatus.ACCEPTED)
+	public void parse() {
+		resumeParsing.parseInBackground(currentUser.currentUserId());
 	}
 
 	@GetMapping

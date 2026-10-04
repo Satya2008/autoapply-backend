@@ -20,7 +20,9 @@ public class ApplicationConfig {
 
 	@Bean
 	RestClient matchingRestClient(RestClient.Builder builder, ServicesProperties properties) {
-		HttpClient httpClient = HttpClient.newBuilder().connectTimeout(properties.connectTimeout()).build();
+		// HTTP/1.1: between services on plain http an HTTP/2 upgrade buys nothing and some servers drop it
+		HttpClient httpClient = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1)
+				.connectTimeout(properties.connectTimeout()).build();
 		JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(httpClient);
 		factory.setReadTimeout(properties.readTimeout());
 		return builder.clone().requestFactory(factory).baseUrl(properties.matchingServiceUrl()).build();

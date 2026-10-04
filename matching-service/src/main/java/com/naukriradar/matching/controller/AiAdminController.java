@@ -35,7 +35,10 @@ public class AiAdminController {
 		this.usage = usage;
 	}
 
-	/** Checks keys and config with a tiny prompt. 503 says what each provider answered. */
+	/**
+	 * Checks keys and config with a tiny prompt; never answered from the cache, since the
+	 * point is to reach the provider. 503 says what each provider answered.
+	 */
 	@PostMapping("/test")
 	public AiTestResponse test(@Valid @RequestBody(required = false) AiTestRequest request) {
 		AiTestRequest test = request == null ? new AiTestRequest(null, null, null) : request;
@@ -43,7 +46,7 @@ public class AiAdminController {
 		AiResult result;
 		try {
 			result = test.provider() == null || test.provider().isBlank()
-					? router.run(TEST_PROMPT, variables, null)
+					? router.run(TEST_PROMPT, variables, null, true)
 					: router.runWith(TEST_PROMPT, variables, test.provider().strip(), test.model());
 		}
 		catch (AiUnavailableException ex) {

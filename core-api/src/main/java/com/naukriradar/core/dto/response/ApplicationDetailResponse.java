@@ -13,5 +13,6 @@ public record ApplicationDetailResponse(
 		String lastError,
 		Instant nextAttemptAt,
 		Map<String, String> prefill,
+		String coverLetter,
 		List<ApplicationEventResponse> timeline) {
 }

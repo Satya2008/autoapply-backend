@@ -23,7 +23,8 @@ import org.springframework.stereotype.Service;
 
 /**
  * One user's matching, start to end: profile from core-api, shortlist from job-service,
- * drop excluded jobs, score the rest, keep the ones above the threshold. Synchronous and free
+ * drop excluded jobs, score the rest, keep the ones above the threshold, and let the AI
+ * review the best few. Synchronous and free
  * of threading, so it can be tested directly; {@link MatchRunWorker} runs it in the background.
  */
 @Service
@@ -35,16 +36,18 @@ public class MatchEngine {
 	private final JobMatchWriter writer;
 	private final MatchMapper mapper;
 	private final MatchingProperties properties;
+	private final AiReRanker reRanker;
 	private final Clock clock = Clock.systemUTC();
 
 	public MatchEngine(CoreApiClient coreApi, JobServiceClient jobService, MatchScorer scorer, JobMatchWriter writer,
-			MatchMapper mapper, MatchingProperties properties) {
+			MatchMapper mapper, MatchingProperties properties, AiReRanker reRanker) {
 		this.coreApi = coreApi;
 		this.jobService = jobService;
 		this.scorer = scorer;
 		this.writer = writer;
 		this.mapper = mapper;
 		this.properties = properties;
+		this.reRanker = reRanker;
 	}
 
 	public Outcome match(String userId) {
@@ -85,10 +88,17 @@ public class MatchEngine {
 
 		JobMatchWriter.Counts counts = writer.upsert(userId, keep, now);
 		writer.deleteFor(userId, drop);
-		return new Outcome(seen.size(), excluded, counts.created(), counts.updated(), drop.size() - excluded);
+		AiReRanker.Outcome ai = reRanker.rerank(profile, keep);
+		return new Outcome(seen.size(), excluded, counts.created(), counts.updated(), drop.size() - excluded, ai.scored(),
+				ai.note());
 	}
 
-	public record Outcome(int jobsConsidered, int excluded, int created, int updated, int belowThreshold) {
+	/**
+	 * @param aiReviewed how many of the top matches the AI scored
+	 * @param aiNote why the AI review stopped early, or null
+	 */
+	public record Outcome(int jobsConsidered, int excluded, int created, int updated, int belowThreshold, int aiReviewed,
+			String aiNote) {
 	}
 
 }

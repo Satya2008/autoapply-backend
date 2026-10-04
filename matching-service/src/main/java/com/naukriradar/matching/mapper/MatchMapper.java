@@ -18,6 +18,9 @@ public class MatchMapper {
 	private static final TypeReference<List<FactorScore>> BREAKDOWN = new TypeReference<>() {
 	};
 
+	private static final TypeReference<List<String>> REASONS = new TypeReference<>() {
+	};
+
 	private final JsonMapper jsonMapper;
 
 	public MatchMapper(JsonMapper jsonMapper) {
@@ -26,18 +29,20 @@ public class MatchMapper {
 
 	public MatchRunResponse toResponse(MatchRun run) {
 		return new MatchRunResponse(run.getId(), run.getStatus(), run.getJobsConsidered(), run.getExcluded(),
-				run.getMatchesCreated(), run.getMatchesUpdated(), run.getBelowThreshold(), run.getMessage(),
+				run.getMatchesCreated(), run.getMatchesUpdated(), run.getBelowThreshold(), run.getAiReviewed(), run.getMessage(),
 				run.getStartedAt(), run.getFinishedAt());
 	}
 
 	public MatchSummaryResponse toSummary(JobMatch match) {
-		return new MatchSummaryResponse(match.getId(), match.getJobId(), match.getScore(), match.getJobTitle(),
+		return new MatchSummaryResponse(match.getId(), match.getJobId(), match.getScore(), match.getAiScore(), match.getJobTitle(),
 				match.getJobCompany(), match.getJobLocation(), match.isJobRemote(), match.getJobPostedAt(),
 				match.getJobApplyUrl(), match.getUpdatedAt());
 	}
 
 	public MatchDetailResponse toDetail(JobMatch match) {
-		return new MatchDetailResponse(toSummary(match), match.getStatus(), readBreakdown(match.getBreakdown()));
+		List<String> aiReasons = match.getAiReasons() == null ? List.of() : jsonMapper.readValue(match.getAiReasons(), REASONS);
+		return new MatchDetailResponse(toSummary(match), match.getStatus(), readBreakdown(match.getBreakdown()), aiReasons,
+				match.getAiScoredBy());
 	}
 
 	public String writeBreakdown(List<FactorScore> breakdown) {

@@ -293,6 +293,39 @@ Every service can run as several instances behind the gateway.
 - Every answer is recorded with tokens, cost and latency. Each user has a daily AI budget
   ($0.50 by default); past it, AI is skipped for them.
 
+### AI features: parse once, score many
+
+| Endpoint | What it does |
+|---|---|
+| `GET /api/v1/jobs/{id}` | Now with `requirements`: required skills, minimum years, seniority, work mode |
+| `POST /api/v1/admin/jobs/reparse` | Parse every active job again (after the prompt improved), in the background |
+| `POST /api/v1/me/resume/parse` | Read the resume with AI again, in the background |
+| `GET /api/v1/me/matches/{id}` | Now with `aiScore`, `aiReasons` and who scored it |
+| `POST /api/v1/me/applications/{id}/cover-letter?regenerate=` | Write (or rewrite) a cover letter |
+
+- **Jobs are parsed once**, by job-service after each fetch and every 15 minutes, and every
+  user's matching reuses the result. The local scorer then compares skills against the
+  job's actual requirements ("has 3 of the 4 skills the job asks for; missing Kafka")
+  and uses the parsed minimum years.
+- **AI reviews only the top 10 local matches** per run, not every job. For 100 users and
+  1,000 new jobs that is about 1,000 + 100 x 10 = 2,000 AI calls instead of 100,000 if
+  every user-job pair went to the AI: 50 times fewer.
+- **Answers are cached** in Redis by prompt version and a hash of the exact text sent, so
+  the same profile and job are never paid for twice; "regenerate" skips the cache.
+- **Cheap vs strong**: parsing and scoring use each provider's everyday model; cover
+  letters use its `strongModel` when one is set.
+- **Prompt injection**: postings and resumes are untrusted. They go inside tags with an
+  instruction to treat them as data, and the answer must match a JSON Schema, so an
+  instruction hidden in a posting can at most produce a wrong score, never an action.
+- The resume is read with AI after upload, in the background: skills the dictionary missed
+  are added with years; skills the candidate typed are never changed.
+- **Without AI everything still works**: matching keeps its local scores and says why AI
+  was skipped, jobs stay unparsed until AI is back, and a cover letter answers 503 with
+  the reason.
+- AI lives in matching-service; job-service and core-api ask it through
+  `POST /internal/v1/ai/run`, so providers, fallback, cache, budgets and cost tracking stay
+  in one place.
+
 Errors come back as [Problem Details](https://www.rfc-editor.org/rfc/rfc9457)
 (`application/problem+json`), with field errors under `errors`.
 
@@ -320,7 +353,7 @@ tests route to a fake service, so they need no database. Tests need Redis runnin
 - [x] Phase 7: runtime settings, encrypted secrets, audit log, schedulable jobs
 - [x] Phase 10: Redis (locks, two-level cache, rate limits, settings sync, ShedLock)
 - [x] Phase 11: resilience (retry, circuit breaker, bulkhead) and the AI foundation
-- [ ] Phase 12: AI parsing and re-ranking
+- [x] Phase 12: AI parsing of jobs and resumes, AI review of top matches, cover letters
 - [ ] Phase 9: Docker, Flyway, Testcontainers
 - [ ] Phases 13–19
 - [ ] Phase 8, last: security (JWT at the gateway, roles, Google sign-in). Nothing is

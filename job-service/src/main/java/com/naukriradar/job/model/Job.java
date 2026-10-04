@@ -93,6 +93,13 @@ public class Job {
 	@Column(name = "last_seen_at", nullable = false)
 	private Instant lastSeenAt;
 
+	/** What AI read out of the posting (skills, years, seniority, work mode); null until parsed. */
+	@Column(name = "parsed_json", columnDefinition = "text")
+	private String parsedJson;
+
+	@Column(name = "parsed_at")
+	private Instant parsedAt;
+
 	@Version
 	private long version;
 

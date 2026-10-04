@@ -62,6 +62,13 @@ public class Resume {
 	@Column(nullable = false)
 	private Instant uploadedAt;
 
+	/** What AI read out of the resume (skills with years, seniority, roles); null until parsed. */
+	@Column(name = "parsed_json", columnDefinition = "text")
+	private String parsedJson;
+
+	@Column(name = "parsed_at")
+	private Instant parsedAt;
+
 	@Version
 	private long version;
 
@@ -82,6 +89,11 @@ public class Resume {
 
 	public boolean hasText() {
 		return extractedText != null && !extractedText.isBlank();
+	}
+
+	public void parsed(String json, Instant at) {
+		this.parsedJson = json;
+		this.parsedAt = at;
 	}
 
 }

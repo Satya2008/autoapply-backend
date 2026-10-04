@@ -65,13 +65,14 @@ public class ResumeService {
 	private final FileStorage storage;
 	private final ResumeMapper mapper;
 	private final ResumeProperties properties;
+	private final ResumeParsingService resumeParsing;
 	private final TransactionTemplate transaction;
 	private final TransactionTemplate readOnlyTransaction;
 	private final Clock clock;
 
 	public ResumeService(UserRepository userRepository, ResumeRepository resumeRepository,
 			ProfileService profileService, ResumeParser parser, SkillExtractor skillExtractor,
-			FileStorage storage, ResumeMapper mapper, ResumeProperties properties,
+			FileStorage storage, ResumeMapper mapper, ResumeProperties properties, ResumeParsingService resumeParsing,
 			PlatformTransactionManager transactionManager) {
 		this.userRepository = userRepository;
 		this.resumeRepository = resumeRepository;
@@ -81,6 +82,7 @@ public class ResumeService {
 		this.storage = storage;
 		this.mapper = mapper;
 		this.properties = properties;
+		this.resumeParsing = resumeParsing;
 		this.transaction = new TransactionTemplate(transactionManager);
 		this.readOnlyTransaction = new TransactionTemplate(transactionManager);
 		this.readOnlyTransaction.setReadOnly(true);
@@ -135,6 +137,8 @@ public class ResumeService {
 		if (saved.replacedKey() != null && !saved.replacedKey().equals(key)) {
 			deleteQuietly(saved.replacedKey());
 		}
+		// AI reads it in the background and adds what the dictionary missed
+		resumeParsing.parseInBackground(userId);
 		return new ResumeUploadResponse(saved.resume(), List.copyOf(skillsFound), saved.skills().added(),
 				saved.skills().autoApplyTurnedOff());
 	}

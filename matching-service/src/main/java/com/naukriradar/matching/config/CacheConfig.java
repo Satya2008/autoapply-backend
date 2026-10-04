@@ -3,6 +3,7 @@ package com.naukriradar.matching.config;
 import java.time.Duration;
 
 import com.naukriradar.common.redis.cache.CacheSpec;
+import com.naukriradar.matching.ai.AiResult;
 import com.naukriradar.matching.dto.response.MatchPageResponse;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -16,6 +17,14 @@ import org.springframework.context.annotation.Configuration;
 public class CacheConfig {
 
 	public static final String MATCH_PAGES = "match-pages";
+
+	public static final String AI_RESULTS = "ai-results";
+
+	/** Paid AI answers; a week in Redis is long enough to cover re-runs, short enough to stay small. */
+	@Bean
+	CacheSpec aiResultsCache() {
+		return new CacheSpec(AI_RESULTS, AiResult.class, Duration.ofMinutes(10), 1_000, Duration.ofDays(7));
+	}
 
 	@Bean
 	CacheSpec matchPagesCache() {

@@ -68,6 +68,21 @@ public class JobMatch {
 	@Column(nullable = false, length = 10)
 	private MatchStatus status;
 
+	/** 0-100 from the AI review of the top matches; null when not reviewed. */
+	@Column(name = "ai_score")
+	private Integer aiScore;
+
+	/** JSON list of short reasons for the AI score. */
+	@Column(name = "ai_reasons", columnDefinition = "text")
+	private String aiReasons;
+
+	/** provider:model that gave the AI score. */
+	@Column(name = "ai_scored_by", length = 160)
+	private String aiScoredBy;
+
+	@Column(name = "ai_scored_at")
+	private Instant aiScoredAt;
+
 	@Column(nullable = false, updatable = false)
 	private Instant createdAt;
 

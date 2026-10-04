@@ -16,6 +16,7 @@ import org.hibernate.validator.constraints.URL;
  * A new AI provider account.
  *
  * @param baseUrl leave out for the type's usual address; set it for OpenAI-compatible services
+ * @param strongModel a better model for writing tasks (cover letters); optional
  * @param enabled defaults to true
  * @param inputPrice USD per million input tokens, for the cost report; optional
  */
@@ -25,6 +26,7 @@ public record AiProviderCreateRequest(
 		@Size(max = 255) @URL String baseUrl,
 		@Size(max = 500) String apiKey,
 		@NotBlank @Size(max = 100) String model,
+		@Size(max = 100) String strongModel,
 		Boolean enabled,
 		@Min(5) @Max(600) Integer timeoutSeconds,
 		@DecimalMin("0") BigDecimal inputPrice,
