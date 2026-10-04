@@ -1,4 +1,4 @@
-# NaukriRadar â€” Backend
+# NaukriRadar — Backend
 
 NaukriRadar pulls job postings from job boards, scores each one against a candidate's
 profile, and applies where it is safe to automate. Where it is not (LinkedIn, Naukri,
@@ -10,21 +10,21 @@ Microservices from the start, each in its own Gradle module with its own databas
 one repository.
 
 ```
-client â”€â”€â–º gateway :8080 â”€â”¬â”€â–º core-api         :8081 â”€â”€â–º MySQL naukriradar_core
-                          â”œâ”€â–º job-service      :8082 â”€â”€â–º MySQL naukriradar_job â”€â”€â–º job boards
-                          â””â”€â–º matching-service :8083 â”€â”€â–º MySQL naukriradar_matching
+client ──► gateway :8080 ─┬─► core-api         :8081 ──► MySQL naukriradar_core
+                          ├─► job-service      :8082 ──► MySQL naukriradar_job ──► job boards
+                          └─► matching-service :8083 ──► MySQL naukriradar_matching
                                 (calls core-api and job-service on /internal APIs)
 ```
 
 | Module | Port | What it owns | Status |
 |---|---|---|---|
-| `gateway` | 8080 | The only public entry point. Routes requests, and serves one Swagger UI for all services | âœ… |
-| `core-api` | 8081 | Users, profiles, skills, resumes, applications | âœ… |
-| `job-service` | 8082 | Job boards as configuration; fetching, cleaning and storing jobs | âœ… |
-| `matching-service` | 8083 | Scoring jobs against a profile, keeping the best matches | âœ… |
+| `gateway` | 8080 | The only public entry point. Routes requests, and serves one Swagger UI for all services | ✅ |
+| `core-api` | 8081 | Users, profiles, skills, resumes, applications | ✅ |
+| `job-service` | 8082 | Job boards as configuration; fetching, cleaning and storing jobs | ✅ |
+| `matching-service` | 8083 | Scoring jobs against a profile, keeping the best matches | ✅ |
 | `apply-worker` | 8084 | Browser automation for low-risk portals | Phase 15 |
 | `notification-service` | 8085 | Email, Telegram, daily digest | Phase 16 |
-| `libs/common-web` | â€” | Shared Problem Details errors and the `X-User-Id` caller lookup | âœ… |
+| `libs/common-web` | — | Shared Problem Details errors and the `X-User-Id` caller lookup | ✅ |
 
 ## Tech stack
 
@@ -63,6 +63,11 @@ client â”€â”€â–º gateway :8080 â”€â”¬â”€â–º core
    ```
 
    The app itself keeps files on local disk unless `naukriradar.storage.type=S3`.
+
+   Kafka on `localhost:9092` carries the events between services (tests need it too). On
+   Windows without Docker, unpack Apache Kafka and run `scripts/start-kafka.ps1` (single
+   node, KRaft, 256 MB heap). Without Kafka the services still run; events wait in the
+   outbox until it is back.
 
 2. Start everything at once (Windows PowerShell), then walk the main flow:
 
@@ -354,6 +359,35 @@ Every service can run as several instances behind the gateway.
   its bytes, size, parsing) and the pending upload is deleted.
 - The multipart `POST /api/v1/me/resume` still works with either storage.
 
+### Events (Kafka + outbox)
+
+```
+fetch run --jobs.ingested--> parse with AI --jobs.parsed--> rematch active users
+   --match.created (key: user)--> auto apply --apply.completed--> live screen (SSE)
+```
+
+| Endpoint | What it does |
+|---|---|
+| `GET /api/v1/me/applications/stream` | Server-Sent Events: the user's apply runs as they finish |
+| `GET /api/v1/admin/events/{service}/dlq?topic=` | Events that failed every retry, with the error |
+| `POST /api/v1/admin/events/{service}/dlq/{id}/replay` | Send one again after the fix |
+| `GET /api/v1/admin/events/{service}/outbox` | Pending events and how long the oldest has waited |
+
+- **Outbox**: an event is a row written in the same transaction as the change it describes,
+  so a commit and its event can't get separated (the dual-write problem). A relay sends the
+  rows to Kafka in order; one instance relays at a time.
+- **At least once, processed once**: the relay may send twice after a crash, so consumers
+  record each event id in `processed_events`, together with their work, or for long work
+  after it, relying on business keys (one run per user, one application per user and job).
+- **Ordering**: user events are keyed by user id, so one user's events stay in order on one
+  partition while different users are handled in parallel.
+- **Dead letters**: a failing event is retried twice, then saved with its error and sent
+  to `<topic>.dlq`; the consumer moves on. Replay keeps the original event id.
+- **Envelope**: event id, type, version, time, source, key, payload, so payloads can change
+  shape without breaking older consumers.
+- Measured locally: one fetch run reached the user's live screen 20 s later, 16 s of it the
+  board fetch itself; nothing was called by hand in between.
+
 Errors come back as [Problem Details](https://www.rfc-editor.org/rfc/rfc9457)
 (`application/problem+json`), with field errors under `errors`.
 
@@ -383,7 +417,8 @@ tests route to a fake service, so they need no database. Tests need Redis runnin
 - [x] Phase 11: resilience (retry, circuit breaker, bulkhead) and the AI foundation
 - [x] Phase 12: AI parsing of jobs and resumes, AI review of top matches, cover letters
 - [x] Phase 13: object storage (S3-compatible), presigned upload and download, migration
+- [x] Phase 14: Kafka events with transactional outbox, idempotent consumers, dead letters, SSE
 - [ ] Phase 9: Docker, Flyway, Testcontainers
-- [ ] Phases 14â€“19
+- [ ] Phases 15–19
 - [ ] Phase 8, last: security (JWT at the gateway, roles, Google sign-in). Nothing is
       deployed publicly before it.
