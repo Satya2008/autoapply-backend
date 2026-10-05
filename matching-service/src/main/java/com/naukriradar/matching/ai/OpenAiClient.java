@@ -1,8 +1,10 @@
 package com.naukriradar.matching.ai;
 
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 import com.naukriradar.matching.model.AiProviderType;
 import org.springframework.http.HttpHeaders;
@@ -49,6 +51,32 @@ public class OpenAiClient extends HttpAiClient {
 		String text = text(reply.path("choices").path(0).path("message").path("content"), "message");
 		JsonNode usage = reply.path("usage");
 		return new AiCompletion(text, usage.path("prompt_tokens").asLong(), usage.path("completion_tokens").asLong());
+	}
+
+	/** /v1/embeddings; each item says which input it belongs to, so the order is rebuilt from that. */
+	@Override
+	public AiEmbeddings embed(ProviderConnection provider, String model, List<String> texts) {
+		JsonNode reply = client(provider).post()
+				.uri("/v1/embeddings")
+				.header(HttpHeaders.AUTHORIZATION, "Bearer " + provider.apiKey())
+				.contentType(MediaType.APPLICATION_JSON)
+				.body(Map.of("model", model, "input", texts))
+				.retrieve()
+				.body(JsonNode.class);
+		if (reply == null) {
+			throw new AiProviderException("Empty reply.");
+		}
+		float[][] ordered = new float[texts.size()][];
+		for (JsonNode item : reply.path("data")) {
+			int index = item.path("index").asInt(-1);
+			if (index < 0 || index >= ordered.length) {
+				throw new AiProviderException("Embedding for an input that wasn't sent (index " + index + ").");
+			}
+			ordered[index] = vector(item.path("embedding"));
+		}
+		List<float[]> vectors = Arrays.stream(ordered).filter(Objects::nonNull).toList();
+		checkCount(vectors, texts);
+		return new AiEmbeddings(vectors, reply.path("usage").path("prompt_tokens").asLong());
 	}
 
 	@Override

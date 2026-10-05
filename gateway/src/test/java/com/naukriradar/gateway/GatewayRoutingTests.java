@@ -109,6 +109,20 @@ class GatewayRoutingTests {
 	}
 
 	@Test
+	void skillGapAndEvalsGoToMatchingAndScreeningAnswersToCoreApi() throws Exception {
+		String user = "44444444-4444-4444-4444-444444444444";
+		HttpResponse<String> gap = send(HttpRequest.newBuilder(uri("/api/v1/me/skill-gap")).header("X-User-Id", user));
+		HttpResponse<String> eval = send(HttpRequest.newBuilder(uri("/api/v1/admin/evals/runs"))
+				.POST(HttpRequest.BodyPublishers.ofString("{}")));
+		HttpResponse<String> answers = send(HttpRequest.newBuilder(uri("/api/v1/me/applications/a1/screening-answers"))
+				.header("X-User-Id", user).POST(HttpRequest.BodyPublishers.ofString("{}")));
+
+		assertThat(gap.body()).isEqualTo("matching-service saw GET /api/v1/me/skill-gap as " + user);
+		assertThat(eval.body()).isEqualTo("matching-service saw POST /api/v1/admin/evals/runs as null");
+		assertThat(answers.body()).isEqualTo("core-api saw POST /api/v1/me/applications/a1/screening-answers as " + user);
+	}
+
+	@Test
 	void applicationsAndPortalsGoToCoreApi() throws Exception {
 		String user = "33333333-3333-3333-3333-333333333333";
 		HttpResponse<String> runs = send(HttpRequest.newBuilder(uri("/api/v1/me/applications/runs")).header("X-User-Id", user)

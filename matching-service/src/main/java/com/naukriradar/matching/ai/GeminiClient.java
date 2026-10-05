@@ -51,6 +51,32 @@ public class GeminiClient extends HttpAiClient {
 		return new AiCompletion(text, usage.path("promptTokenCount").asLong(), usage.path("candidatesTokenCount").asLong());
 	}
 
+	/** batchEmbedContents: one request per text, answered in the same order. */
+	@Override
+	public AiEmbeddings embed(ProviderConnection provider, String model, List<String> texts) {
+		String name = "models/" + model;
+		List<Map<String, Object>> requests = texts.stream()
+				.<Map<String, Object>>map(text -> Map.of("model", name, "content", Map.of("parts", List.of(Map.of("text", text)))))
+				.toList();
+		JsonNode reply = client(provider).post()
+				.uri("/v1beta/models/{model}:batchEmbedContents", model)
+				.header("x-goog-api-key", provider.apiKey())
+				.contentType(MediaType.APPLICATION_JSON)
+				.body(Map.of("requests", requests))
+				.retrieve()
+				.body(JsonNode.class);
+		if (reply == null) {
+			throw new AiProviderException("Empty reply.");
+		}
+		List<float[]> vectors = new ArrayList<>();
+		for (JsonNode embedding : reply.path("embeddings")) {
+			vectors.add(vector(embedding.path("values")));
+		}
+		checkCount(vectors, texts);
+		// Gemini doesn't report embedding tokens
+		return new AiEmbeddings(vectors, 0);
+	}
+
 	/** Only models that can generate text; names come as "models/x" and are given back as "x". */
 	@Override
 	public List<String> listModels(ProviderConnection provider) {

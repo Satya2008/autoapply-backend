@@ -43,6 +43,7 @@ naukriradar:
     max-text-chars: 200000
   services:
     matching-service-url: ${MATCHING_SERVICE_URL:http://localhost:8083}
+    job-service-url: ${JOB_SERVICE_URL:http://localhost:8082}
     connect-timeout: 3s
     read-timeout: 15s
   applications:

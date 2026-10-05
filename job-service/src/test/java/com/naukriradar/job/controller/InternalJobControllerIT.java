@@ -26,6 +26,7 @@ import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.lessThanOrEqualTo;
 import static org.hamcrest.Matchers.startsWith;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -101,6 +102,47 @@ class InternalJobControllerIT {
 		mvc.perform(post("/internal/v1/jobs/candidates").contentType(MediaType.APPLICATION_JSON)
 				.content("{\"keywords\": [], \"limit\": 5000}"))
 				.andExpect(status().isBadRequest());
+	}
+
+	@Test
+	void recentJobsComePageByPageInIdOrderWithoutOldOrClosedOnes() throws Exception {
+		List<String> ours = jdbc.queryForList("SELECT id FROM jobs WHERE source_code = ? AND status = 'ACTIVE'"
+				+ " AND sort_at >= NOW() - INTERVAL 30 DAY ORDER BY id", String.class, source);
+		assertThat(ours).hasSize(2);
+		String before = jdbc.queryForObject("SELECT MAX(id) FROM jobs WHERE id < ?", String.class, ours.getFirst());
+
+		String first = mvc.perform(get("/internal/v1/jobs/recent").param("days", "30").param("limit", "1")
+				.param("after", before == null ? "" : before))
+				.andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+		assertThat(JsonPath.<List<String>>read(first, "$[*].id")).containsExactly(ours.get(0));
+		String second = mvc.perform(get("/internal/v1/jobs/recent").param("days", "30").param("limit", "1")
+				.param("after", ours.get(0))).andReturn().getResponse().getContentAsString();
+		assertThat(JsonPath.<List<String>>read(second, "$[*].id")).containsExactly(ours.get(1));
+		mvc.perform(get("/internal/v1/jobs/recent").param("limit", "5000")).andExpect(status().isBadRequest());
+	}
+
+	@Test
+	void jobsByIdComeInTheAskedOrderAndOnlyWhileActive() throws Exception {
+		String strong = idOf("strong");
+		String weak = idOf("weak");
+		String closed = idOf("closed");
+
+		mvc.perform(post("/internal/v1/jobs/by-ids").contentType(MediaType.APPLICATION_JSON)
+				.content("{\"ids\": [\"" + weak + "\", \"" + closed + "\", \"nope\", \"" + strong + "\", \"" + weak + "\"]}"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$[*].id", contains(weak, strong)));
+		mvc.perform(post("/internal/v1/jobs/by-ids").contentType(MediaType.APPLICATION_JSON).content("{\"ids\": []}"))
+				.andExpect(jsonPath("$", hasSize(0)));
+
+		// one job by id, even closed: a cover letter can be written after the posting closed
+		mvc.perform(get("/internal/v1/jobs/" + closed)).andExpect(status().isOk())
+				.andExpect(jsonPath("$.title").value(token + " Analyst"));
+		mvc.perform(get("/internal/v1/jobs/nope")).andExpect(status().isNotFound());
+	}
+
+	private String idOf(String externalId) {
+		return jdbc.queryForObject("SELECT id FROM jobs WHERE source_code = ? AND external_id = ?", String.class, source,
+				externalId);
 	}
 
 	private ResultActions candidates(String body) throws Exception {

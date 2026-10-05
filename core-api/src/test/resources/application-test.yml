@@ -25,6 +25,8 @@ naukriradar:
     # ApplicationControllerIT runs WireMock on this port in place of matching-service. A fixed
     # port keeps one Spring context for every integration test.
     matching-service-url: http://localhost:18083
+    # the same WireMock plays job-service (job descriptions for cover letters)
+    job-service-url: http://localhost:18083
   security:
     encryption-key: qm/EECDO4DzcKUTPq4yhw2TNC1fGcjzfcFdyxJWoIZ8=
   scheduler:

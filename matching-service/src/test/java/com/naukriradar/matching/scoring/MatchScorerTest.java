@@ -17,7 +17,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class MatchScorerTest {
 
 	private static final Map<String, Integer> DEFAULT_WEIGHTS = Map.of("skills", 35, "title", 25, "location", 15,
-			"salary", 10, "experience", 10, "recency", 5);
+			"salary", 10, "experience", 10, "recency", 5, "semantic", 15);
 
 	@Test
 	void totalIsTheWeightedAverageOutOf100() {
@@ -66,7 +66,7 @@ class MatchScorerTest {
 
 	static List<ScoringFactor> allFactors() {
 		return List.of(new SkillFactor(), new TitleFactor(), new LocationFactor(), new SalaryFactor(),
-				new ExperienceFactor(), new RecencyFactor());
+				new ExperienceFactor(), new RecencyFactor(), new SemanticFactor());
 	}
 
 	static Map<String, Integer> defaultWeights() {

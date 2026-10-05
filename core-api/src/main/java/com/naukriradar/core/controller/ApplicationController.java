@@ -4,6 +4,7 @@ import java.net.URI;
 import java.util.List;
 
 import com.naukriradar.common.security.CurrentUserProvider;
+import com.naukriradar.core.dto.request.ScreeningQuestionsRequest;
 import com.naukriradar.core.dto.request.StatusUpdateRequest;
 import com.naukriradar.core.dto.response.ApplicationDetailResponse;
 import com.naukriradar.core.dto.response.ApplicationPageResponse;
@@ -11,11 +12,13 @@ import com.naukriradar.core.dto.response.ApplicationStatsResponse;
 import com.naukriradar.core.dto.response.ApplyRunResponse;
 import com.naukriradar.core.dto.response.CoverLetterResponse;
 import com.naukriradar.core.dto.response.NeedsYouResponse;
+import com.naukriradar.core.dto.response.ScreeningAnswersResponse;
 import com.naukriradar.core.model.ApplicationStatus;
 import com.naukriradar.core.service.ApplicationService;
 import com.naukriradar.core.service.ApplyProgressStreams;
 import com.naukriradar.core.service.ApplyRunService;
-import com.naukriradar.core.service.CoverLetterService;
+import com.naukriradar.core.service.RagCoverLetterService;
+import com.naukriradar.core.service.ScreeningAnswerService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -39,15 +42,18 @@ public class ApplicationController {
 	private final CurrentUserProvider currentUser;
 	private final ApplyRunService runService;
 	private final ApplicationService applicationService;
-	private final CoverLetterService coverLetters;
+	private final RagCoverLetterService coverLetters;
+	private final ScreeningAnswerService screeningAnswers;
 	private final ApplyProgressStreams streams;
 
 	public ApplicationController(CurrentUserProvider currentUser, ApplyRunService runService,
-			ApplicationService applicationService, CoverLetterService coverLetters, ApplyProgressStreams streams) {
+			ApplicationService applicationService, RagCoverLetterService coverLetters, ScreeningAnswerService screeningAnswers,
+			ApplyProgressStreams streams) {
 		this.currentUser = currentUser;
 		this.runService = runService;
 		this.applicationService = applicationService;
 		this.coverLetters = coverLetters;
+		this.screeningAnswers = screeningAnswers;
 		this.streams = streams;
 	}
 
@@ -61,12 +67,20 @@ public class ApplicationController {
 	}
 
 	/**
-	 * Writes a cover letter for this application with AI. The same letter comes back until
-	 * {@code regenerate=true}. 503 when AI can't write right now.
+	 * Writes a cover letter for this application from the parts of your resume that fit the job,
+	 * and says if it claims anything your resume doesn't back. The same letter comes back until
+	 * {@code regenerate=true}. Without AI you get a plain draft from a template.
 	 */
 	@PostMapping("/{id}/cover-letter")
 	public CoverLetterResponse coverLetter(@PathVariable String id, @RequestParam(defaultValue = "false") boolean regenerate) {
 		return coverLetters.write(currentUser.currentUserId(), id, regenerate);
+	}
+
+	/** Answers the form's screening questions from your profile and resume; the ones it can't are marked for you. */
+	@PostMapping("/{id}/screening-answers")
+	public ScreeningAnswersResponse screeningAnswers(@PathVariable String id,
+			@Valid @RequestBody ScreeningQuestionsRequest request) {
+		return screeningAnswers.answer(currentUser.currentUserId(), id, request.questions());
 	}
 
 	/**

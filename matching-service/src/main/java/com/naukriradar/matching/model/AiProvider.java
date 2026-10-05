@@ -58,6 +58,10 @@ public class AiProvider {
 	@Column(name = "strong_model", length = 100)
 	private String strongModel;
 
+	/** Turns texts into vectors for semantic matching; null when this provider isn't used for that. */
+	@Column(name = "embedding_model", length = 100)
+	private String embeddingModel;
+
 	@Column(nullable = false)
 	private boolean enabled;
 
@@ -105,6 +109,10 @@ public class AiProvider {
 		this.strongModel = strongModel;
 	}
 
+	public void setEmbeddingModel(String embeddingModel) {
+		this.embeddingModel = embeddingModel;
+	}
+
 	public void setEnabled(boolean enabled) {
 		this.enabled = enabled;
 	}
@@ -130,6 +138,11 @@ public class AiProvider {
 	/** Has what it needs to be called: a model, and a key unless the type needs none. */
 	public boolean isReady() {
 		return enabled && model != null && !model.isBlank() && (!type.needsApiKey() || apiKey != null);
+	}
+
+	/** Ready, and set up to embed texts. */
+	public boolean isReadyForEmbeddings() {
+		return isReady() && type.supportsEmbeddings() && embeddingModel != null && !embeddingModel.isBlank();
 	}
 
 }

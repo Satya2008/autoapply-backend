@@ -1,5 +1,6 @@
 package com.naukriradar.core.client;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -18,6 +19,9 @@ public class MatchingClient {
 
 	private static final ParameterizedTypeReference<List<MatchForApply>> MATCHES = new ParameterizedTypeReference<>() {
 	};
+
+	/** matching-service takes queries up to this long. */
+	private static final int MAX_QUERY = 4000;
 
 	private final RestClient matchingRestClient;
 	private final Resilience resilience;
@@ -57,6 +61,37 @@ public class MatchingClient {
 		}
 		catch (RestClientException | DependencyUnavailableException ex) {
 			return new AiReply(null, "matching-service is unavailable right now.", null);
+		}
+	}
+
+	/**
+	 * The ids of the passages that best answer the query, best first (hybrid: meaning and
+	 * keywords). Empty when matching-service can't be reached: the caller falls back to its
+	 * own order rather than failing.
+	 */
+	public List<String> retrieve(String query, Map<String, String> passagesById, int top) {
+		if (passagesById.isEmpty() || query == null || query.isBlank()) {
+			return List.of();
+		}
+		List<Map<String, String>> passages = passagesById.entrySet().stream()
+				.map(e -> Map.of("id", e.getKey(), "text", e.getValue()))
+				.toList();
+		String clipped = query.length() > MAX_QUERY ? query.substring(0, MAX_QUERY) : query;
+		try {
+			JsonNode reply = resilience.call("matching-service", () -> matchingRestClient.post()
+					.uri("/internal/v1/ai/retrieve")
+					.contentType(MediaType.APPLICATION_JSON)
+					.body(Map.of("query", clipped, "passages", passages, "top", top))
+					.retrieve()
+					.body(JsonNode.class));
+			List<String> ids = new ArrayList<>();
+			if (reply != null) {
+				reply.path("passages").forEach(p -> ids.add(p.path("id").asString()));
+			}
+			return ids;
+		}
+		catch (RestClientException | DependencyUnavailableException ex) {
+			return List.of();
 		}
 	}
 

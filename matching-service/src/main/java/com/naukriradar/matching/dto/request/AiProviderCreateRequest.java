@@ -19,6 +19,7 @@ import org.hibernate.validator.constraints.URL;
  * @param strongModel a better model for writing tasks (cover letters); optional
  * @param enabled defaults to true
  * @param inputPrice USD per million input tokens, for the cost report; optional
+ * @param embeddingModel set it to use this provider for semantic matching; optional
  */
 public record AiProviderCreateRequest(
 		@NotBlank @Pattern(regexp = "[a-z0-9][a-z0-9-]{0,49}", message = "lowercase letters, digits and dashes") String name,
@@ -30,5 +31,6 @@ public record AiProviderCreateRequest(
 		Boolean enabled,
 		@Min(5) @Max(600) Integer timeoutSeconds,
 		@DecimalMin("0") BigDecimal inputPrice,
-		@DecimalMin("0") BigDecimal outputPrice) {
+		@DecimalMin("0") BigDecimal outputPrice,
+		@Size(max = 100) String embeddingModel) {
 }

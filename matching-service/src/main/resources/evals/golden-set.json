@@ -1,0 +1,146 @@
+[
+  {
+    "name": "java-backend-vs-spring-microservices",
+    "profile": { "skills": ["java", "spring boot", "mysql", "rest"], "targetRoles": ["Java Backend Developer"], "experienceYears": 3 },
+    "job": { "title": "Spring Microservices Engineer", "company": "Finlytics",
+      "description": "Build and run microservices with Spring Cloud and Kafka. You will design REST APIs, own services end to end and work with MySQL and Redis. 2+ years with the JVM.",
+      "minYearsExperience": 2 },
+    "expectedScore": 82,
+    "notes": "Same job in other words: the title shares no word with the target role."
+  },
+  {
+    "name": "java-developer-vs-javascript-developer",
+    "profile": { "skills": ["java", "spring boot", "hibernate"], "targetRoles": ["Java Developer"], "experienceYears": 4 },
+    "job": { "title": "JavaScript Developer", "company": "PixelCraft",
+      "description": "Build rich web interfaces in React and TypeScript. Strong CSS and HTML, state management with Redux, unit tests with Jest.",
+      "minYearsExperience": 3 },
+    "expectedScore": 12,
+    "notes": "Looks alike on the surface (Java/JavaScript, Developer), unrelated work."
+  },
+  {
+    "name": "python-data-engineer-vs-etl-engineer",
+    "profile": { "skills": ["python", "spark", "airflow", "sql"], "targetRoles": ["Data Engineer"], "experienceYears": 5 },
+    "job": { "title": "ETL Pipeline Engineer", "company": "RetailIQ",
+      "description": "Own our batch data pipelines: PySpark jobs orchestrated with Airflow, landing in Snowflake. Data modelling and SQL tuning.",
+      "minYearsExperience": 4 },
+    "expectedScore": 85,
+    "notes": "Different title, same role."
+  },
+  {
+    "name": "devops-vs-site-reliability",
+    "profile": { "skills": ["kubernetes", "terraform", "aws", "docker"], "targetRoles": ["DevOps Engineer"], "experienceYears": 4 },
+    "job": { "title": "Site Reliability Engineer", "company": "CloudNine",
+      "description": "Keep our Kubernetes clusters on AWS healthy, write Terraform, build CI/CD with GitHub Actions and run on-call.",
+      "minYearsExperience": 3 },
+    "expectedScore": 84,
+    "notes": "SRE is DevOps by another name."
+  },
+  {
+    "name": "frontend-react-vs-ui-engineer",
+    "profile": { "skills": ["react", "typescript", "css"], "targetRoles": ["Frontend Developer"], "experienceYears": 2 },
+    "job": { "title": "UI Engineer", "company": "ShopEase",
+      "description": "Build our storefront with React and Next.js, TypeScript everywhere, Tailwind for styling.",
+      "minYearsExperience": 2 },
+    "expectedScore": 83,
+    "notes": "UI Engineer for a React frontend profile."
+  },
+  {
+    "name": "backend-java-vs-android",
+    "profile": { "skills": ["java", "spring boot", "postgresql"], "targetRoles": ["Backend Engineer"], "experienceYears": 3 },
+    "job": { "title": "Android Developer", "company": "Appify",
+      "description": "Build our Android app in Kotlin and Java with Jetpack Compose. Experience publishing on the Play Store.",
+      "minYearsExperience": 2 },
+    "expectedScore": 25,
+    "notes": "Shares Java, but mobile work."
+  },
+  {
+    "name": "ml-engineer-vs-data-scientist",
+    "profile": { "skills": ["python", "pytorch", "nlp"], "targetRoles": ["Machine Learning Engineer"], "experienceYears": 3 },
+    "job": { "title": "Data Scientist", "company": "Insightly",
+      "description": "Train and ship NLP models in PyTorch, run experiments, work with LLMs and deploy models behind APIs.",
+      "minYearsExperience": 2 },
+    "expectedScore": 75,
+    "notes": "Close neighbour roles."
+  },
+  {
+    "name": "qa-automation-vs-sdet",
+    "profile": { "skills": ["selenium", "java", "testng"], "targetRoles": ["QA Automation Engineer"], "experienceYears": 3 },
+    "job": { "title": "SDET", "company": "TestRight",
+      "description": "Write automated tests with Selenium and TestNG, build the test framework, run tests in CI.",
+      "minYearsExperience": 2 },
+    "expectedScore": 86,
+    "notes": "SDET is a test automation role; the title is an abbreviation."
+  },
+  {
+    "name": "java-backend-exact",
+    "profile": { "skills": ["java", "spring boot", "kafka", "mysql"], "targetRoles": ["Backend Developer"], "experienceYears": 4 },
+    "job": { "title": "Senior Backend Developer", "company": "PayFlow",
+      "description": "Java and Spring Boot services, Kafka for events, MySQL. Design APIs and mentor juniors.",
+      "requiredSkills": ["Java", "Spring Boot", "Kafka", "MySQL"], "minYearsExperience": 4, "seniority": "senior" },
+    "expectedScore": 92,
+    "notes": "Plain keyword match; both should get this right."
+  },
+  {
+    "name": "dotnet-vs-java-backend",
+    "profile": { "skills": ["java", "spring boot", "mysql"], "targetRoles": ["Backend Developer"], "experienceYears": 3 },
+    "job": { "title": "Backend Developer", "company": "Ledgerly",
+      "description": "C# and ASP.NET Core services with Entity Framework on SQL Server, hosted on Azure.",
+      "requiredSkills": ["C#", ".NET", "SQL Server", "Azure"], "minYearsExperience": 3 },
+    "expectedScore": 40,
+    "notes": "Same title, different stack: a stretch, not a match."
+  },
+  {
+    "name": "sales-vs-developer",
+    "profile": { "skills": ["java", "spring boot"], "targetRoles": ["Software Engineer"], "experienceYears": 2 },
+    "job": { "title": "Inside Sales Executive", "company": "SaaSify",
+      "description": "Call leads, run demos of our software product, hit monthly targets. Excellent English.",
+      "minYearsExperience": 1 },
+    "expectedScore": 5,
+    "notes": "Mentions software, nothing to do with engineering."
+  },
+  {
+    "name": "fullstack-mern-vs-node-backend",
+    "profile": { "skills": ["node.js", "express", "mongodb", "react"], "targetRoles": ["Full Stack Developer"], "experienceYears": 3 },
+    "job": { "title": "Node.js Backend Engineer", "company": "ChatWave",
+      "description": "Build APIs with Node.js and NestJS on MongoDB and Redis; some React work on the admin panel.",
+      "minYearsExperience": 2 },
+    "expectedScore": 72,
+    "notes": "A full-stack profile fits a Node backend role well."
+  },
+  {
+    "name": "go-backend-vs-golang-platform",
+    "profile": { "skills": ["golang", "grpc", "postgresql", "docker"], "targetRoles": ["Go Developer"], "experienceYears": 4 },
+    "job": { "title": "Platform Engineer", "company": "InfraWorks",
+      "description": "Write Go services for our internal platform, gRPC APIs, PostgreSQL, everything in Docker and Kubernetes.",
+      "minYearsExperience": 3 },
+    "expectedScore": 80,
+    "notes": "'Platform Engineer' hides a Go backend job."
+  },
+  {
+    "name": "junior-vs-principal",
+    "profile": { "skills": ["java", "spring boot"], "targetRoles": ["Java Developer"], "experienceYears": 1 },
+    "job": { "title": "Principal Java Architect", "company": "BankCore",
+      "description": "Lead architecture across 40 Java teams, Spring and microservices, 12+ years required.",
+      "requiredSkills": ["Java", "Spring", "Microservices", "Architecture"], "minYearsExperience": 12, "seniority": "principal" },
+    "expectedScore": 30,
+    "notes": "Right stack, far too senior."
+  },
+  {
+    "name": "designer-vs-frontend",
+    "profile": { "skills": ["figma", "user research", "prototyping"], "targetRoles": ["Product Designer"], "experienceYears": 3 },
+    "job": { "title": "Frontend Developer", "company": "Webly",
+      "description": "Implement designs in React, TypeScript and CSS; work closely with our designers in Figma.",
+      "minYearsExperience": 2 },
+    "expectedScore": 18,
+    "notes": "Mentions Figma, but it is a coding job."
+  },
+  {
+    "name": "cloud-engineer-vs-aws-devops",
+    "profile": { "skills": ["aws", "terraform", "linux"], "targetRoles": ["Cloud Engineer"], "experienceYears": 3 },
+    "job": { "title": "AWS DevOps Engineer", "company": "Scalr",
+      "description": "Provision AWS with Terraform, manage EC2, S3 and Lambda, automate deployments with Jenkins.",
+      "minYearsExperience": 3 },
+    "expectedScore": 80,
+    "notes": "Cloud and DevOps overlap heavily."
+  }
+]

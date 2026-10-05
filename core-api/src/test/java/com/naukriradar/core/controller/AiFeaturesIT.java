@@ -6,7 +6,9 @@ import java.util.List;
 import java.util.UUID;
 import java.util.function.Predicate;
 
+import com.github.tomakehurst.wiremock.client.WireMock;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
+import com.github.tomakehurst.wiremock.stubbing.Scenario;
 import com.jayway.jsonpath.JsonPath;
 import com.naukriradar.core.model.Application;
 import com.naukriradar.core.model.RiskBand;
@@ -86,7 +88,7 @@ class AiFeaturesIT {
 	@Test
 	void aCoverLetterIsWrittenForAnApplicationAndCanBeRegenerated() throws Exception {
 		matching.stubFor(post(urlPathEqualTo("/internal/v1/ai/run"))
-				.withRequestBody(equalToJson("{\"prompt\": \"cover-letter\"}", true, true))
+				.withRequestBody(equalToJson("{\"prompt\": \"cover-letter-rag\"}", true, true))
 				.willReturn(okJson("""
 						{"provider": "fake", "model": "strong", "answer": {"letter": "Dear hiring team, ..."}}""")));
 		String user = newUser();
@@ -99,7 +101,9 @@ class AiFeaturesIT {
 				.header(USER_HEADER, user))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.letter").value("Dear hiring team, ..."))
-				.andExpect(jsonPath("$.writtenBy").value("fake:strong"));
+				.andExpect(jsonPath("$.writtenBy").value("fake:strong"))
+				.andExpect(jsonPath("$.grounded").value(true))
+				.andExpect(jsonPath("$.draft").value(false));
 		mvc.perform(MockMvcRequestBuilders.post("/api/v1/me/applications/" + application.getId() + "/cover-letter")
 				.param("regenerate", "true").header(USER_HEADER, user))
 				.andExpect(status().isOk());
@@ -107,7 +111,7 @@ class AiFeaturesIT {
 				.andExpect(jsonPath("$.coverLetter").value("Dear hiring team, ..."));
 
 		String sent = matching.findAll(postRequestedFor(urlPathEqualTo("/internal/v1/ai/run"))
-				.withRequestBody(equalToJson("{\"prompt\": \"cover-letter\"}", true, true))).getLast().getBodyAsString();
+				.withRequestBody(equalToJson("{\"prompt\": \"cover-letter-rag\"}", true, true))).getLast().getBodyAsString();
 		assertThat(sent).contains("Backend Engineer").contains("\"fresh\":true").contains(user);
 
 		mvc.perform(MockMvcRequestBuilders.post("/api/v1/me/applications/" + application.getId() + "/cover-letter")
@@ -116,7 +120,7 @@ class AiFeaturesIT {
 	}
 
 	@Test
-	void withoutAiTheCoverLetterAnswerSaysWhy() throws Exception {
+	void withoutAiTheUserStillGetsADraftLetterFromTheirOwnFacts() throws Exception {
 		matching.stubFor(post(urlPathEqualTo("/internal/v1/ai/run")).willReturn(okJson(
 				"{\"answer\": null, \"unavailableReason\": \"Today's AI budget is used up.\"}")));
 		String user = newUser();
@@ -125,8 +129,104 @@ class AiFeaturesIT {
 
 		mvc.perform(MockMvcRequestBuilders.post("/api/v1/me/applications/" + application.getId() + "/cover-letter")
 				.header(USER_HEADER, user))
-				.andExpect(status().isServiceUnavailable())
-				.andExpect(jsonPath("$.detail", containsString("budget")));
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.writtenBy").value("template"))
+				.andExpect(jsonPath("$.draft").value(true))
+				.andExpect(jsonPath("$.note", containsString("budget")))
+				.andExpect(jsonPath("$.letter", containsString("apply for the QA role")))
+				.andExpect(jsonPath("$.letter", containsString("Initech")));
+	}
+
+	@Test
+	void theLetterIsBuiltOnTheResumeAndAClaimTheResumeDoesntBackIsWrittenAgain() throws Exception {
+		String user = newUser();
+		uploadResume(user);
+		String jobId = UUID.randomUUID().toString();
+		matching.stubFor(WireMock.get(urlPathEqualTo("/internal/v1/jobs/" + jobId)).willReturn(okJson("""
+				{"id": "%s", "title": "Payments Engineer", "company": "PayFlow", "location": "Pune",
+				 "description": "Build payment services on Kafka.", "requiredSkills": ["Java", "Kafka"]}""".formatted(jobId))));
+		matching.stubFor(post(urlPathEqualTo("/internal/v1/ai/run")).inScenario("rag-" + user)
+				.whenScenarioStateIs(Scenario.STARTED)
+				.withRequestBody(equalToJson("{\"prompt\": \"cover-letter-rag\", \"userId\": \"" + user + "\"}", true, true))
+				.willReturn(okJson("""
+						{"provider": "fake", "model": "strong", "answer": {"letter": "I spent 9 years running Kubernetes at Google."}}"""))
+				.willSetStateTo("second"));
+		matching.stubFor(post(urlPathEqualTo("/internal/v1/ai/run")).inScenario("rag-" + user)
+				.whenScenarioStateIs("second")
+				.withRequestBody(equalToJson("{\"prompt\": \"cover-letter-rag\", \"userId\": \"" + user + "\"}", true, true))
+				.willReturn(okJson("""
+						{"provider": "fake", "model": "strong", "answer": {"letter": "At Acme Corp I built payment services in Java and Kafka."}}""")));
+		Application application = applications.saveAndFlush(new Application(user, jobId, "Payments Engineer", "PayFlow", "Pune",
+				"https://jobs.example.com/p", 80, RiskBand.MEDIUM, "unknown site", "{}"));
+
+		mvc.perform(MockMvcRequestBuilders.post("/api/v1/me/applications/" + application.getId() + "/cover-letter")
+				.header(USER_HEADER, user))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.letter").value("At Acme Corp I built payment services in Java and Kafka."))
+				.andExpect(jsonPath("$.grounded").value(true))
+				.andExpect(jsonPath("$.evidence", hasItem("experience")));
+
+		List<String> sent = matching.findAll(postRequestedFor(urlPathEqualTo("/internal/v1/ai/run"))
+				.withRequestBody(equalToJson("{\"prompt\": \"cover-letter-rag\", \"userId\": \"" + user + "\"}", true, true)))
+				.stream().map(r -> r.getBodyAsString()).toList();
+		assertThat(sent).hasSize(2);
+		assertThat(sent.getFirst()).contains("Build payment services on Kafka").contains("payment services in Java and Kafka")
+				.doesNotContain("asha@example.com");
+		assertThat(sent.getLast()).contains("kubernetes").contains("Google").contains("\"fresh\":true");
+	}
+
+	@Test
+	void screeningQuestionsAreAnsweredFromTheProfileThenTheResumeAndTheRestAreLeftToTheUser() throws Exception {
+		String user = newUser();
+		uploadResume(user);
+		mvc.perform(MockMvcRequestBuilders.put("/api/v1/me/profile").header(USER_HEADER, user).contentType(MediaType.APPLICATION_JSON)
+				.content("""
+						{"fullName": "Asha Rao", "location": "Pune", "experienceYears": 4, "noticePeriodDays": 30, "remoteOk": true,
+						 "minMatchScore": 50, "dailyApplyLimit": 10, "autoApplyEnabled": false}"""))
+				.andExpect(status().isOk());
+		mvc.perform(MockMvcRequestBuilders.put("/api/v1/me/skills").header(USER_HEADER, user)
+				.contentType(MediaType.APPLICATION_JSON).content("{\"skills\": [{\"name\": \"java\", \"years\": 3}]}"));
+		matching.stubFor(post(urlPathEqualTo("/internal/v1/ai/run"))
+				.withRequestBody(equalToJson("{\"prompt\": \"screening-answers\", \"userId\": \"" + user + "\"}", true, true))
+				.willReturn(okJson("""
+						{"provider": "fake", "model": "strong", "answer": {"answers": [
+						  {"index": 1, "answer": "Yes, I built payment services on Kafka at Acme Corp.", "answerable": true},
+						  {"index": 2, "answer": "", "answerable": false}]}}""")));
+		Application application = applications.saveAndFlush(new Application(user, UUID.randomUUID().toString(), "Backend Engineer",
+				"Acme", "Pune", "https://jobs.example.com/s", 80, RiskBand.MEDIUM, "unknown site", "{}"));
+		String questions = """
+				{"questions": ["What is your notice period?", "How many years of experience do you have in Java?",
+				  "Have you worked with Kafka?", "Why do you want to join us?"]}""";
+
+		String body = mvc.perform(MockMvcRequestBuilders.post("/api/v1/me/applications/" + application.getId() + "/screening-answers")
+				.header(USER_HEADER, user).contentType(MediaType.APPLICATION_JSON).content(questions))
+				.andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+
+		assertThat(JsonPath.<List<String>>read(body, "$.answers[*].source")).containsExactly("PROFILE", "PROFILE", "AI", "NONE");
+		assertThat(JsonPath.<List<String>>read(body, "$.answers[*].answer"))
+				.containsExactly("30 days.", "3 years.", "Yes, I built payment services on Kafka at Acme Corp.", null);
+		assertThat(JsonPath.<List<Boolean>>read(body, "$.answers[*].needsYou")).containsExactly(false, false, false, true);
+		assertThat(JsonPath.<String>read(body, "$.answeredBy")).isEqualTo("fake:strong");
+		String sent = matching.findAll(postRequestedFor(urlPathEqualTo("/internal/v1/ai/run"))
+				.withRequestBody(equalToJson("{\"prompt\": \"screening-answers\", \"userId\": \"" + user + "\"}", true, true)))
+				.getLast().getBodyAsString();
+		// only the questions the profile couldn't answer went to AI
+		assertThat(sent).contains("1. Have you worked with Kafka?").doesNotContain("notice period");
+
+		mvc.perform(MockMvcRequestBuilders.post("/api/v1/me/applications/" + application.getId() + "/screening-answers")
+				.header(USER_HEADER, user).contentType(MediaType.APPLICATION_JSON).content("{\"questions\": []}"))
+				.andExpect(status().isBadRequest());
+		mvc.perform(MockMvcRequestBuilders.post("/api/v1/me/applications/" + application.getId() + "/screening-answers")
+				.header(USER_HEADER, newUser()).contentType(MediaType.APPLICATION_JSON).content(questions))
+				.andExpect(status().isNotFound());
+	}
+
+	private void uploadResume(String user) throws Exception {
+		MockMultipartFile file = new MockMultipartFile("file", "cv.pdf", MediaType.APPLICATION_PDF_VALUE, TestDocuments.pdf(
+				"Asha Rao", "asha@example.com", "Experience", "Backend developer at Acme Corp",
+				"Built payment services in Java and Kafka for 2 million users", "Projects",
+				"Order tracker in Spring Boot with MySQL", "Education", "B.Tech, 2019"));
+		mvc.perform(multipart("/api/v1/me/resume").file(file).header(USER_HEADER, user)).andExpect(status().isOk());
 	}
 
 	private String newUser() throws Exception {

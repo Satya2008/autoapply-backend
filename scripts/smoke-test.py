@@ -1,5 +1,6 @@
 """Walks the main flow through the gateway against running services: create a user, set
-skills and profile, fetch jobs, match, run applying, show the results.
+skills and profile, fetch jobs, match, run applying, show the results; then the AI features
+(skill gap, cover letter, screening answers, the matcher eval), which work without an AI key too.
 
     python scripts/smoke-test.py
 """
@@ -76,9 +77,14 @@ for m in page.get("items", []):
     print(f"     {m['score']:>3}  {m.get('title')} @ {m.get('company')} | {m.get('location')}")
 
 code, run = call("POST", "/api/v1/me/applications/runs", user=uid)
-step("start apply run", code, run)
-run = wait("/api/v1/me/applications/runs/" + run["id"], uid)
-print("     apply run:", {k: v for k, v in run.items() if k not in ("id", "userId")})
+if code == 409:
+    # match.created already started one for this user (auto-apply): let it finish
+    print("OK  409  apply run already started by the match event; waiting for it")
+    time.sleep(15)
+else:
+    step("start apply run", code, run)
+    run = wait("/api/v1/me/applications/runs/" + run["id"], uid)
+    print("     apply run:", {k: v for k, v in run.items() if k not in ("id", "userId")})
 
 code, stats = call("GET", "/api/v1/me/applications/stats", user=uid)
 step("application stats", code, stats)
@@ -89,3 +95,44 @@ items = needs if isinstance(needs, list) else needs.get("items", [])
 for n in items[:3]:
     app = n.get("application", n)
     print(f"     - {app.get('title')} ({app.get('riskBand')}) | {n.get('reason') or app.get('needsYouReason')}")
+
+# Phase 18: semantic matching, RAG and evals
+code, status = call("GET", "/api/v1/admin/ai/embeddings")
+step("embedding model", code, status)
+print("     ", status)
+
+code, gap = call("GET", "/api/v1/me/skill-gap", user=uid)
+step("skill gap", code, gap)
+if code < 400:
+    print(f"      {gap['currentMatches']} of {gap['jobsAnalysed']} jobs match now (threshold {gap['threshold']})")
+    for g in gap["gaps"][:5]:
+        print(f"     + {g['skill']:<15} asked by {g['jobsAsking']:>3} jobs, +{g['extraMatches']} matches")
+
+if items:
+    app = items[0].get("application", items[0])
+    code, letter = call("POST", f"/api/v1/me/applications/{app['id']}/cover-letter", user=uid)
+    step("cover letter", code, letter)
+    if code < 400:
+        print(f"      by {letter['writtenBy']}, draft={letter['draft']}, grounded={letter['grounded']}, evidence={letter['evidence']}")
+        print("      " + letter["letter"][:300].replace("\n", "\n      "))
+    code, answers = call("POST", f"/api/v1/me/applications/{app['id']}/screening-answers", {"questions": [
+        "What is your notice period?", "How many years of experience do you have?",
+        "Have you worked with Kafka?", "Why do you want to join us?"]}, uid)
+    step("screening answers", code, answers)
+    if code < 400:
+        for a in answers["answers"]:
+            print(f"     - [{a['source']}] {a['question']} -> {a['answer']}")
+
+code, run = call("POST", "/api/v1/admin/evals/runs", {"kind": "MATCHER"})
+step("matcher eval", code, run)
+if code == 202:
+    for _ in range(60):
+        code, run = call("GET", "/api/v1/admin/evals/runs/" + run["id"])
+        if run["status"] in ("SUCCEEDED", "FAILED"):
+            break
+        time.sleep(2)
+    m = run.get("metrics") or {}
+    print("     ", run["status"], m.get("verdict") or run.get("error"))
+    for kind in ("keyword", "hybrid"):
+        if kind in m:
+            print(f"      {kind:<8} mae {m[kind]['mae']}, spearman {m[kind]['spearman']}, f1 {m[kind]['f1']}")

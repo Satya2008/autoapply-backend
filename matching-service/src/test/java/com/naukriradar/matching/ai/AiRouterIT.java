@@ -99,7 +99,7 @@ class AiRouterIT {
 	@Test
 	void theTestEndpointUsesThePrimaryAndRecordsTheCost() throws Exception {
 		providers.create(new AiProviderCreateRequest("nokey-" + suffix(), AiProviderType.GEMINI, url("/nokey"), null, "m0", null,
-				true, null, null, null), "t");
+				true, null, null, null, null), "t");
 		use("good");
 
 		mvc.perform(adminPost("/api/v1/admin/ai/test").contentType(MediaType.APPLICATION_JSON).content("{\"topic\": \"Java\"}"))
@@ -267,7 +267,7 @@ class AiRouterIT {
 
 		String keyless = "keyless-" + suffix();
 		providers.create(new AiProviderCreateRequest(keyless, AiProviderType.OPENAI, url("/x"), null, "m", null, true, null, null,
-				null), "t");
+				null, null), "t");
 		mvc.perform(adminGet("/api/v1/admin/ai/providers/" + keyless + "/models")).andExpect(status().isServiceUnavailable());
 	}
 
@@ -301,7 +301,7 @@ class AiRouterIT {
 	private void provider(String name, AiProviderType type, String model) {
 		if (!providerRepository.existsByName(name)) {
 			providers.create(new AiProviderCreateRequest(name, type, url("/" + name), "key-" + name + "-123456", model, null, true,
-					null, null, null), "test");
+					null, null, null, null), "test");
 		}
 	}
 
@@ -309,7 +309,7 @@ class AiRouterIT {
 	private void use(String... names) {
 		List<String> wanted = List.of(names);
 		providers.list().forEach(p -> providers.update(p.name(),
-				new AiProviderUpdateRequest(null, null, null, null, wanted.contains(p.name()), null, null, null), "test"));
+				new AiProviderUpdateRequest(null, null, null, null, wanted.contains(p.name()), null, null, null, null), "test"));
 		if (!wanted.isEmpty()) {
 			providers.reorder(wanted);
 		}

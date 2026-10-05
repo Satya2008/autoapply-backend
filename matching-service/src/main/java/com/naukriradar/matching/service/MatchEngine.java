@@ -12,6 +12,7 @@ import com.naukriradar.matching.client.CoreApiClient;
 import com.naukriradar.matching.client.JobServiceClient;
 import com.naukriradar.matching.client.MatchingProfile;
 import com.naukriradar.matching.config.MatchingProperties;
+import com.naukriradar.matching.config.SemanticProperties;
 import com.naukriradar.matching.mapper.MatchMapper;
 import com.naukriradar.matching.repository.JobMatchWriter;
 import com.naukriradar.matching.repository.JobMatchWriter.ScoredJob;
@@ -19,16 +20,21 @@ import com.naukriradar.matching.scoring.ExclusionFilter;
 import com.naukriradar.matching.scoring.MatchContext;
 import com.naukriradar.matching.scoring.MatchScorer;
 import com.naukriradar.matching.scoring.ScoreResult;
+import com.naukriradar.matching.scoring.SemanticVectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 /**
- * One user's matching, start to end: profile from core-api, shortlist from job-service,
- * drop excluded jobs, score the rest, keep the ones above the threshold, and let the AI
- * review the best few. Synchronous and free
+ * One user's matching, start to end: profile from core-api, a hybrid shortlist (keyword
+ * search in job-service plus the nearest jobs by meaning), drop excluded jobs, score the
+ * rest, keep the ones above the threshold, and let the AI review the best few. Synchronous and free
  * of threading, so it can be tested directly; {@link MatchRunWorker} runs it in the background.
  */
 @Service
 public class MatchEngine {
+
+	private static final Logger log = LoggerFactory.getLogger(MatchEngine.class);
 
 	private final CoreApiClient coreApi;
 	private final JobServiceClient jobService;
@@ -37,10 +43,14 @@ public class MatchEngine {
 	private final MatchMapper mapper;
 	private final MatchingProperties properties;
 	private final AiReRanker reRanker;
+	private final SemanticCandidateFinder semanticFinder;
+	private final JobEmbeddingIndexer indexer;
+	private final SemanticProperties semanticProperties;
 	private final Clock clock = Clock.systemUTC();
 
 	public MatchEngine(CoreApiClient coreApi, JobServiceClient jobService, MatchScorer scorer, JobMatchWriter writer,
-			MatchMapper mapper, MatchingProperties properties, AiReRanker reRanker) {
+			MatchMapper mapper, MatchingProperties properties, AiReRanker reRanker, SemanticCandidateFinder semanticFinder,
+			JobEmbeddingIndexer indexer, SemanticProperties semanticProperties) {
 		this.coreApi = coreApi;
 		this.jobService = jobService;
 		this.scorer = scorer;
@@ -48,6 +58,9 @@ public class MatchEngine {
 		this.mapper = mapper;
 		this.properties = properties;
 		this.reRanker = reRanker;
+		this.semanticFinder = semanticFinder;
+		this.indexer = indexer;
+		this.semanticProperties = semanticProperties;
 	}
 
 	public Outcome match(String userId) {
@@ -57,11 +70,13 @@ public class MatchEngine {
 		}
 		Set<String> keywords = new LinkedHashSet<>(profile.skills());
 		keywords.addAll(profile.targetRoles());
-		List<CandidateJob> candidates = jobService.candidates(List.copyOf(keywords), properties.candidateDays(),
+		List<CandidateJob> keywordCandidates = jobService.candidates(List.copyOf(keywords), properties.candidateDays(),
 				properties.candidateLimit());
+		Shortlist shortlist = semanticShortlist(profile, keywordCandidates);
+		List<CandidateJob> candidates = shortlist.jobs();
 
 		Instant now = clock.instant();
-		MatchContext context = MatchContext.of(profile, now);
+		MatchContext context = MatchContext.of(profile, now, shortlist.vectors());
 		ExclusionFilter exclusions = new ExclusionFilter(profile);
 		List<ScoredJob> keep = new ArrayList<>();
 		List<String> drop = new ArrayList<>();
@@ -91,6 +106,34 @@ public class MatchEngine {
 		AiReRanker.Outcome ai = reRanker.rerank(profile, keep);
 		return new Outcome(seen.size(), excluded, counts.created(), counts.updated(), drop.size() - excluded, ai.scored(),
 				ai.note());
+	}
+
+	/**
+	 * Keyword shortlist plus the jobs nearest in meaning, fused by rank, with every job's
+	 * vector. Semantic matching is a bonus: if any part of it fails, the keyword shortlist is
+	 * scored on its own, exactly as before.
+	 */
+	private Shortlist semanticShortlist(MatchingProfile profile, List<CandidateJob> keyword) {
+		try {
+			SemanticCandidateFinder.Result semantic = semanticFinder.find(profile);
+			if (!semantic.on()) {
+				return new Shortlist(keyword, SemanticVectors.NONE);
+			}
+			List<CandidateJob> fused = SemanticCandidateFinder.fuse(keyword, semantic.jobs(),
+					properties.candidateLimit() + semanticProperties.candidateTop());
+			JobEmbeddingIndexer.Ensured ensured = indexer.ensure(fused, semantic.modelKey());
+			log.debug("Shortlist for {}: {} by keyword, {} by meaning, {} together", profile.userId(), keyword.size(),
+					semantic.jobs().size(), fused.size());
+			return new Shortlist(fused, new SemanticVectors(semantic.modelKey(), semantic.profileVector(), ensured.vectors(),
+					semanticProperties.range(semantic.modelKey())));
+		}
+		catch (RuntimeException ex) {
+			log.warn("Semantic matching skipped for {}: {}", profile.userId(), ex.toString());
+			return new Shortlist(keyword, SemanticVectors.NONE);
+		}
+	}
+
+	private record Shortlist(List<CandidateJob> jobs, SemanticVectors vectors) {
 	}
 
 	/**

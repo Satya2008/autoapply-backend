@@ -49,12 +49,30 @@ public class MatchScorer {
 	}
 
 	public ScoreResult score(MatchContext context, CandidateJob job) {
+		return score(context, job, Set.of());
+	}
+
+	/**
+	 * Scores as if the named factors didn't exist: the others share the full 100. The eval
+	 * uses it to compare keyword-only scoring with hybrid scoring on the same cases.
+	 */
+	public ScoreResult score(MatchContext context, CandidateJob job, Set<String> leaveOut) {
+		int total = leaveOut.isEmpty() ? totalWeight : factors.stream()
+				.filter(f -> !leaveOut.contains(f.name()))
+				.mapToInt(f -> weights.get(f.name()))
+				.sum();
+		if (total <= 0) {
+			throw new IllegalArgumentException("Leaving out " + leaveOut + " leaves no weight to score with");
+		}
 		List<FactorScore> breakdown = new ArrayList<>(factors.size());
 		double sum = 0;
 		for (ScoringFactor factor : factors) {
+			if (leaveOut.contains(factor.name())) {
+				continue;
+			}
 			int weight = weights.get(factor.name());
 			FactorResult result = factor.score(context, job);
-			double points = 100.0 * weight * result.score() / totalWeight;
+			double points = 100.0 * weight * result.score() / total;
 			sum += points;
 			breakdown.add(new FactorScore(factor.name(), weight, round(result.score(), 2), round(points, 1), result.detail()));
 		}

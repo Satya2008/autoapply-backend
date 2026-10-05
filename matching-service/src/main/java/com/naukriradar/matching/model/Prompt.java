@@ -49,6 +49,10 @@ public class Prompt {
 	@Column(name = "created_at", nullable = false)
 	private Instant createdAt;
 
+	/** When this version first went live; null if it never has. */
+	@Column(name = "activated_at")
+	private Instant activatedAt;
+
 	public Prompt(String code, int version, String system, String template, String outputSchema, Instant createdAt) {
 		this.code = code;
 		this.version = version;
@@ -58,8 +62,12 @@ public class Prompt {
 		this.createdAt = createdAt;
 	}
 
-	public void activate() {
+	/** The first time a version goes live is remembered: going back to it later needs no new eval. */
+	public void activate(Instant at) {
 		this.active = true;
+		if (activatedAt == null) {
+			activatedAt = at;
+		}
 	}
 
 	public void deactivate() {

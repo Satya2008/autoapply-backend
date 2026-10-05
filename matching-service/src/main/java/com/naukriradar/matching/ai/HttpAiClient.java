@@ -60,6 +60,25 @@ abstract class HttpAiClient implements AiClient {
 		return ids.stream().sorted().toList();
 	}
 
+	/** A JSON array of numbers as floats; a missing or empty array is a broken reply. */
+	protected static float[] vector(JsonNode array) {
+		if (array == null || !array.isArray() || array.isEmpty()) {
+			throw new AiProviderException("The reply has no embedding.");
+		}
+		float[] vector = new float[array.size()];
+		for (int i = 0; i < vector.length; i++) {
+			vector[i] = (float) array.get(i).asDouble();
+		}
+		return vector;
+	}
+
+	/** Every text must come back with a vector, or the order can't be trusted. */
+	protected static void checkCount(List<float[]> vectors, List<String> texts) {
+		if (vectors.size() != texts.size()) {
+			throw new AiProviderException("Asked for " + texts.size() + " embeddings, got " + vectors.size() + ".");
+		}
+	}
+
 	protected static String text(JsonNode node, String what) {
 		if (node == null || node.isMissingNode() || node.isNull()) {
 			throw new AiProviderException("The reply has no " + what + ".");

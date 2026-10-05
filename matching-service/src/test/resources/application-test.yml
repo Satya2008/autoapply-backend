@@ -21,6 +21,11 @@ naukriradar:
     prefix: "test."
   security:
     encryption-key: 4bGq9vXo2LmT7yRk1PzWc8NdEh3UjAs5FiKt6QwYn0M=
+  scheduling:
+    enabled: false
+  semantic:
+    # job-service isn't running in tests; the tests that need the index fill it themselves
+    index-on-startup: false
   ai:
     prices:
       model-a: { input: 1.00, output: 5.00 }

@@ -1,5 +1,6 @@
 package com.naukriradar.matching.ai;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -47,6 +48,26 @@ public class OllamaClient extends HttpAiClient {
 		}
 		String text = text(reply.path("message").path("content"), "message");
 		return new AiCompletion(text, reply.path("prompt_eval_count").asLong(), reply.path("eval_count").asLong());
+	}
+
+	/** /api/embed takes a list and answers in the same order. */
+	@Override
+	public AiEmbeddings embed(ProviderConnection provider, String model, List<String> texts) {
+		JsonNode reply = client(provider).post()
+				.uri("/api/embed")
+				.contentType(MediaType.APPLICATION_JSON)
+				.body(Map.of("model", model, "input", texts))
+				.retrieve()
+				.body(JsonNode.class);
+		if (reply == null) {
+			throw new AiProviderException("Empty reply.");
+		}
+		List<float[]> vectors = new ArrayList<>();
+		for (JsonNode embedding : reply.path("embeddings")) {
+			vectors.add(vector(embedding));
+		}
+		checkCount(vectors, texts);
+		return new AiEmbeddings(vectors, reply.path("prompt_eval_count").asLong());
 	}
 
 	/** The models pulled onto this Ollama server. */

@@ -24,9 +24,9 @@ public record AiProperties(
 		@DefaultValue("0.50") BigDecimal dailyBudgetUsd,
 		@DefaultValue Map<String, SeedProvider> seedProviders,
 		@DefaultValue Map<String, Price> prices,
-		@DefaultValue("cover-letter") List<String> strongPurposes) {
+		@DefaultValue({ "cover-letter", "cover-letter-rag", "screening-answers" }) List<String> strongPurposes) {
 
-	public record SeedProvider(AiProviderType type, String baseUrl, String apiKey, String model) {
+	public record SeedProvider(AiProviderType type, String baseUrl, String apiKey, String model, String embeddingModel) {
 	}
 
 	/** USD per million tokens, which is the same number as micro-dollars per token. */

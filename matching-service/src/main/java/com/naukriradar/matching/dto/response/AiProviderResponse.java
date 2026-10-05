@@ -10,9 +10,10 @@ import com.naukriradar.matching.model.AiProviderType;
  *
  * @param ready enabled and has everything it needs to be called
  * @param primary the first one tried
+ * @param embeddingModel the model used for semantic matching, or null if this provider isn't used for it
  */
 public record AiProviderResponse(String name, AiProviderType type, String baseUrl, String model, String strongModel,
-		boolean enabled,
-		boolean ready, boolean primary, int priority, boolean apiKeySet, String apiKeyHint, int timeoutSeconds,
-		BigDecimal inputPrice, BigDecimal outputPrice, Instant updatedAt, String updatedBy) {
+		String embeddingModel, boolean enabled, boolean ready, boolean primary, int priority, boolean apiKeySet,
+		String apiKeyHint, int timeoutSeconds, BigDecimal inputPrice, BigDecimal outputPrice, Instant updatedAt,
+		String updatedBy) {
 }

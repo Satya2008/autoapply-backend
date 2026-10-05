@@ -43,11 +43,38 @@ naukriradar:
       salary: 10
       experience: 10
       recency: 5
+      # closeness in meaning (embeddings); "can't tell" when semantic matching is off
+      semantic: 15
     min-store-score: 20
     candidate-limit: 300
     candidate-days: 60
     worker-threads: 2
     queue-capacity: 20
+
+  # Semantic matching. The embedding model is picked at runtime: set "embeddingModel" on any
+  # provider under /api/v1/admin/ai/providers; with none, the built-in local embedder is used.
+  semantic:
+    enabled: true
+    candidate-top: 100
+    max-indexed-jobs: 20000
+    index-page-size: 200
+    index-on-startup: true
+    # nightly batch: vector index catch-up + rematch of active users; "-" turns it off
+    nightly-cron: "0 30 2 * * *"
+    nightly-zone: Asia/Kolkata
+    # cosine range mapped onto the 0-1 semantic score, per embedding model (tune with the matcher eval)
+    calibration:
+      "[local:hashing-v1]": { floor: 0.25, ceiling: 0.65 }
+      "[openai:text-embedding-3-small]": { floor: 0.20, ceiling: 0.55 }
+      "[gemini:text-embedding-004]": { floor: 0.40, ceiling: 0.75 }
+      "[ollama:nomic-embed-text]": { floor: 0.40, ceiling: 0.75 }
+
+  # A new version of these prompts can go live only after an eval on the golden set passes.
+  evals:
+    gated-prompts: job-fit
+    max-mae: 20
+    min-valid-rate: 0.9
+    relevant-score: 60
 
   # Providers are chosen at runtime: /api/v1/admin/ai/providers (add any provider with its
   # key and model, pick the primary, set the fallback order). The ones below are only added
@@ -64,19 +91,23 @@ naukriradar:
         type: openai
         api-key: ${OPENAI_API_KEY:}
         model: gpt-4o-mini
+        embedding-model: text-embedding-3-small
       gemini:
         type: gemini
         api-key: ${GEMINI_API_KEY:}
         model: gemini-2.0-flash
+        embedding-model: text-embedding-004
       ollama:
         type: ollama
         base-url: ${OLLAMA_URL:}
         model: llama3.2
+        embedding-model: nomic-embed-text
     # USD per million tokens, for providers that don't set their own; check vendor prices
     prices:
       "[claude-haiku-4-5-20251001]": { input: 1.00, output: 5.00 }
       "[gpt-4o-mini]": { input: 0.15, output: 0.60 }
       "[gemini-2.0-flash]": { input: 0.10, output: 0.40 }
+      "[text-embedding-3-small]": { input: 0.02, output: 0 }
   security:
     # encrypts provider API keys at rest; 32 random bytes, base64
     encryption-key: ${NAUKRIRADAR_SECURITY_ENCRYPTION_KEY:}

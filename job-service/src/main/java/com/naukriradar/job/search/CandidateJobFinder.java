@@ -9,9 +9,13 @@ import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TimeZone;
 import java.util.regex.Matcher;
@@ -71,6 +75,36 @@ public class CandidateJobFinder {
 					+ " ORDER BY relevance DESC, sort_at DESC, id DESC LIMIT :limit";
 		}
 		return jdbc.query(sql, params, (rs, n) -> row(rs));
+	}
+
+	/**
+	 * Active jobs posted within the window, in id order after {@code afterId}: a stable keyset
+	 * page, so matching can walk every recent job to build its vector index.
+	 */
+	public List<CandidateJobResponse> recent(int postedWithinDays, String afterId, int limit) {
+		MapSqlParameterSource params = new MapSqlParameterSource()
+				.addValue("since", LocalDateTime.ofInstant(clock.instant().minus(Duration.ofDays(postedWithinDays)), ZoneOffset.UTC))
+				.addValue("after", afterId == null ? "" : afterId)
+				.addValue("limit", limit);
+		return jdbc.query("SELECT " + COLUMNS + " FROM jobs WHERE status = 'ACTIVE' AND sort_at >= :since AND id > :after"
+				+ " ORDER BY id LIMIT :limit", params, (rs, n) -> row(rs));
+	}
+
+	/** These jobs if still active, in the order asked; unknown and closed ones are left out. */
+	public List<CandidateJobResponse> activeByIds(List<String> ids) {
+		if (ids.isEmpty()) {
+			return List.of();
+		}
+		Map<String, CandidateJobResponse> found = new HashMap<>();
+		jdbc.query("SELECT " + COLUMNS + " FROM jobs WHERE status = 'ACTIVE' AND id IN (:ids)",
+				new MapSqlParameterSource("ids", ids), (rs, n) -> row(rs)).forEach(job -> found.put(job.id(), job));
+		return ids.stream().distinct().map(found::get).filter(Objects::nonNull).toList();
+	}
+
+	/** One job, whatever its status: a cover letter may be written after the posting closed. */
+	public Optional<CandidateJobResponse> byId(String id) {
+		return jdbc.query("SELECT " + COLUMNS + " FROM jobs WHERE id = :id", new MapSqlParameterSource("id", id),
+				(rs, n) -> row(rs)).stream().findFirst();
 	}
 
 	/** Plain words only: symbols can't be indexed, and they'd mean nothing special here anyway. */

@@ -1,0 +1,26 @@
+{
+  "_comment": "Concept groups for the built-in local embedder. A text that mentions any phrase of a group gets that group's feature, so 'Spring Microservices Engineer' and 'Java Backend Developer' share 'jvm' and 'backend'. Phrases are lower case and matched as whole words.",
+  "concepts": {
+    "backend": ["backend", "back-end", "back end", "server-side", "server side", "api", "apis", "rest", "restful", "microservices", "microservice", "spring boot", "django", "flask", "fastapi", "express", "nestjs", "golang", "graphql", "grpc"],
+    "frontend": ["frontend", "front-end", "front end", "react", "react.js", "reactjs", "angular", "vue", "vue.js", "javascript", "typescript", "html", "css", "ui developer", "next.js", "redux", "tailwind"],
+    "fullstack": ["full stack", "full-stack", "fullstack", "mern", "mean"],
+    "jvm": ["java", "spring", "spring boot", "spring cloud", "hibernate", "jpa", "kotlin", "scala", "j2ee", "jakarta ee", "maven", "gradle", "jvm"],
+    "python": ["python", "django", "flask", "fastapi", "pandas", "numpy", "celery"],
+    "dotnet": [".net", "c#", "asp.net", "dotnet", ".net core", "entity framework"],
+    "node": ["node.js", "nodejs", "node", "express", "nestjs", "npm"],
+    "go": ["go", "golang"],
+    "data-engineering": ["data engineer", "data engineering", "etl", "elt", "spark", "pyspark", "airflow", "hadoop", "data pipeline", "data pipelines", "databricks", "snowflake", "dbt", "bigquery", "redshift", "data warehouse"],
+    "machine-learning": ["machine learning", "ml", "data scientist", "data science", "deep learning", "pytorch", "tensorflow", "nlp", "llm", "llms", "ai engineer", "computer vision", "scikit-learn", "mlops", "generative ai", "genai"],
+    "devops": ["devops", "sre", "site reliability", "kubernetes", "k8s", "docker", "terraform", "ci/cd", "jenkins", "ansible", "helm", "platform engineer", "github actions", "infrastructure as code"],
+    "cloud": ["aws", "azure", "gcp", "google cloud", "cloud", "ec2", "s3", "lambda", "serverless"],
+    "mobile": ["android", "ios", "flutter", "react native", "swift", "swiftui", "mobile", "jetpack compose", "xcode"],
+    "testing": ["qa", "quality assurance", "test automation", "automation testing", "selenium", "sdet", "tester", "testing", "cypress", "playwright", "junit", "testng", "manual testing"],
+    "databases": ["sql", "mysql", "postgresql", "postgres", "oracle", "mongodb", "redis", "database", "databases", "dba", "nosql", "cassandra", "dynamodb", "elasticsearch"],
+    "distributed-systems": ["microservices", "distributed systems", "kafka", "event-driven", "rabbitmq", "grpc", "scalability", "high availability", "message queue", "event sourcing"],
+    "security": ["security", "appsec", "penetration testing", "pentest", "soc", "siem", "cybersecurity", "iam", "owasp"],
+    "management": ["manager", "engineering manager", "team lead", "tech lead", "scrum master", "product manager", "project manager", "delivery manager"],
+    "design": ["ui/ux", "ux", "ui designer", "figma", "product designer", "ux designer", "user research"],
+    "embedded": ["embedded", "firmware", "rtos", "microcontroller", "c++", "iot"],
+    "software-engineering": ["software engineer", "software developer", "sde", "developer", "programmer", "software development", "engineer"]
+  }
+}

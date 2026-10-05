@@ -25,7 +25,7 @@ spring:
             - id: matching-service
               uri: ${services.matching-service}
               predicates:
-                - Path=/api/v1/me/matches,/api/v1/me/matches/**,/api/v1/admin/prompts,/api/v1/admin/prompts/**,/api/v1/admin/ai/**
+                - Path=/api/v1/me/matches,/api/v1/me/matches/**,/api/v1/me/skill-gap,/api/v1/admin/prompts,/api/v1/admin/prompts/**,/api/v1/admin/ai/**,/api/v1/admin/evals/**
             - id: core-api
               uri: ${services.core-api}
               predicates:

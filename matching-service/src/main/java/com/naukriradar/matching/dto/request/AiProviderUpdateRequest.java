@@ -10,7 +10,8 @@ import org.hibernate.validator.constraints.URL;
 
 /**
  * Changes to a provider. Fields left out stay as they are. {@code apiKey} replaces the key;
- * an empty string removes it.
+ * an empty string removes it. An empty {@code embeddingModel} stops using this provider for
+ * semantic matching.
  */
 public record AiProviderUpdateRequest(
 		@Size(max = 255) @URL String baseUrl,
@@ -20,5 +21,6 @@ public record AiProviderUpdateRequest(
 		Boolean enabled,
 		@Min(5) @Max(600) Integer timeoutSeconds,
 		@DecimalMin("0") BigDecimal inputPrice,
-		@DecimalMin("0") BigDecimal outputPrice) {
+		@DecimalMin("0") BigDecimal outputPrice,
+		@Size(max = 100) String embeddingModel) {
 }

@@ -7,7 +7,10 @@ import com.naukriradar.matching.ai.AiResult;
 import com.naukriradar.matching.ai.AiRouter;
 import com.naukriradar.matching.ai.AiUnavailableException;
 import com.naukriradar.matching.dto.request.AiRunRequest;
+import com.naukriradar.matching.dto.request.RetrieveRequest;
 import com.naukriradar.matching.dto.response.AiRunResponse;
+import com.naukriradar.matching.dto.response.RetrieveResponse;
+import com.naukriradar.matching.service.RetrievalService;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -24,9 +27,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class InternalAiController {
 
 	private final AiRouter router;
+	private final RetrievalService retrieval;
 
-	public InternalAiController(AiRouter router) {
+	public InternalAiController(AiRouter router, RetrievalService retrieval) {
 		this.router = router;
+		this.retrieval = retrieval;
 	}
 
 	/**
@@ -46,6 +51,15 @@ public class InternalAiController {
 		}
 		return new AiRunResponse(result.provider(), result.model(), result.json(),
 				BigDecimal.valueOf(result.costMicros()).movePointLeft(6), null);
+	}
+
+	/**
+	 * The passages that best answer a query, for retrieval-augmented prompts. Always answers:
+	 * without a paid embedding model the local one is used.
+	 */
+	@PostMapping("/retrieve")
+	public RetrieveResponse retrieve(@Valid @RequestBody RetrieveRequest request) {
+		return retrieval.rank(request);
 	}
 
 }

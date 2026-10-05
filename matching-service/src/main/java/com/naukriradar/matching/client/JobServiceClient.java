@@ -2,6 +2,7 @@ package com.naukriradar.matching.client;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import com.naukriradar.common.resilience.DependencyUnavailableException;
 import com.naukriradar.common.resilience.Resilience;
@@ -33,6 +34,43 @@ public class JobServiceClient {
 					.uri("/internal/v1/jobs/candidates")
 					.contentType(MediaType.APPLICATION_JSON)
 					.body(Map.of("keywords", keywords, "postedWithinDays", postedWithinDays, "limit", limit))
+					.retrieve()
+					.body(CANDIDATES));
+			return jobs == null ? List.of() : jobs;
+		}
+		catch (RestClientException | DependencyUnavailableException ex) {
+			throw new UpstreamException("job-service is unavailable right now. Try again shortly.", ex);
+		}
+	}
+
+	/** One page of active jobs posted within the window, in id order after {@code afterId}: for building the vector index. */
+	public List<CandidateJob> recent(int postedWithinDays, String afterId, int limit) {
+		try {
+			List<CandidateJob> jobs = resilience.call("job-service", () -> restClient.get()
+					.uri(uri -> uri.path("/internal/v1/jobs/recent")
+							.queryParam("days", postedWithinDays)
+							.queryParamIfPresent("after", Optional.ofNullable(afterId))
+							.queryParam("limit", limit)
+							.build())
+					.retrieve()
+					.body(CANDIDATES));
+			return jobs == null ? List.of() : jobs;
+		}
+		catch (RestClientException | DependencyUnavailableException ex) {
+			throw new UpstreamException("job-service is unavailable right now. Try again shortly.", ex);
+		}
+	}
+
+	/** These jobs if still active, in the order asked; unknown or closed ones are left out. */
+	public List<CandidateJob> byIds(List<String> ids) {
+		if (ids.isEmpty()) {
+			return List.of();
+		}
+		try {
+			List<CandidateJob> jobs = resilience.call("job-service", () -> restClient.post()
+					.uri("/internal/v1/jobs/by-ids")
+					.contentType(MediaType.APPLICATION_JSON)
+					.body(Map.of("ids", ids))
 					.retrieve()
 					.body(CANDIDATES));
 			return jobs == null ? List.of() : jobs;

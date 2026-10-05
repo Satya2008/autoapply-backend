@@ -74,7 +74,7 @@ class AiMatchingIT {
 		services.stubFor(WireMock.post(urlPathEqualTo("/ai/v1/messages")).willReturn(okJson(JOB_FIT)));
 		if (!providerRepository.existsByName("fit-ai")) {
 			providers.create(new AiProviderCreateRequest("fit-ai", AiProviderType.ANTHROPIC, services.baseUrl() + "/ai",
-					"key-123456789", "model-a", null, true, null, null, null), "test");
+					"key-123456789", "model-a", null, true, null, null, null, null), "test");
 		}
 		aiOn(true);
 	}
@@ -141,7 +141,7 @@ class AiMatchingIT {
 
 	private void aiOn(boolean on) {
 		providers.list().forEach(p -> providers.update(p.name(),
-				new AiProviderUpdateRequest(null, null, null, null, on && p.name().equals("fit-ai"), null, null, null), "test"));
+				new AiProviderUpdateRequest(null, null, null, null, on && p.name().equals("fit-ai"), null, null, null, null), "test"));
 	}
 
 	private ResultActions runToEnd(String user) throws Exception {

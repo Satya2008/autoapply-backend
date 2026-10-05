@@ -9,6 +9,7 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
 public record ServicesProperties(
 		@DefaultValue("http://localhost:8083") String matchingServiceUrl,
 		@DefaultValue("http://localhost:8084") String applyWorkerUrl,
+		@DefaultValue("http://localhost:8082") String jobServiceUrl,
 		@DefaultValue("3s") Duration connectTimeout,
 		@DefaultValue("15s") Duration readTimeout) {
 }

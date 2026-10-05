@@ -16,6 +16,8 @@ public class AsyncConfig {
 
 	public static final String MATCH_EXECUTOR = "matchExecutor";
 
+	public static final String EVAL_EXECUTOR = "evalExecutor";
+
 	@Bean(name = MATCH_EXECUTOR)
 	ThreadPoolTaskExecutor matchExecutor(MatchingProperties properties) {
 		ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
@@ -26,6 +28,20 @@ public class AsyncConfig {
 		// let running matches finish on shutdown; anything left is closed as interrupted on the next start
 		executor.setWaitForTasksToCompleteOnShutdown(true);
 		executor.setAwaitTerminationSeconds(30);
+		return executor;
+	}
+
+	/**
+	 * One eval at a time, plus two waiting: an eval may make dozens of AI calls, and two running
+	 * side by side would only race for the same providers and budget.
+	 */
+	@Bean(name = EVAL_EXECUTOR)
+	ThreadPoolTaskExecutor evalExecutor() {
+		ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+		executor.setCorePoolSize(1);
+		executor.setMaxPoolSize(1);
+		executor.setQueueCapacity(2);
+		executor.setThreadNamePrefix("eval-");
 		return executor;
 	}
 

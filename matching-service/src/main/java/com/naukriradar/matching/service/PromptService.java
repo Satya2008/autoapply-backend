@@ -9,12 +9,17 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import com.naukriradar.common.exception.BadRequestException;
+import com.naukriradar.common.exception.BusinessRuleException;
 import com.naukriradar.common.exception.ConflictException;
 import com.naukriradar.common.exception.NotFoundException;
 import com.naukriradar.matching.ai.ActivePrompt;
+import com.naukriradar.matching.config.EvalProperties;
 import com.naukriradar.matching.dto.request.PromptVersionRequest;
 import com.naukriradar.matching.dto.response.PromptResponse;
+import com.naukriradar.matching.model.EvalKind;
+import com.naukriradar.matching.model.EvalRunStatus;
 import com.naukriradar.matching.model.Prompt;
+import com.naukriradar.matching.repository.EvalRunRepository;
 import com.naukriradar.matching.repository.PromptRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,20 +49,48 @@ public class PromptService {
 	};
 
 	private final PromptRepository repository;
+	private final EvalRunRepository evalRuns;
+	private final EvalProperties evals;
 	private final JsonMapper json;
 	private final Clock clock = Clock.systemUTC();
 
-	public PromptService(PromptRepository repository, JsonMapper json) {
+	public PromptService(PromptRepository repository, EvalRunRepository evalRuns, EvalProperties evals, JsonMapper json) {
 		this.repository = repository;
+		this.evalRuns = evalRuns;
+		this.evals = evals;
 		this.json = json;
 	}
 
 	@Transactional(readOnly = true)
 	public ActivePrompt active(String code) {
-		Prompt prompt = repository.findByCodeAndActiveTrue(code)
-				.orElseThrow(() -> new NotFoundException("No active prompt " + code + "."));
+		return toActive(repository.findByCodeAndActiveTrue(code)
+				.orElseThrow(() -> new NotFoundException("No active prompt " + code + ".")));
+	}
+
+	/** Any version, active or not. */
+	@Transactional(readOnly = true)
+	public ActivePrompt version(String code, int version) {
+		return toActive(load(code, version));
+	}
+
+	/** The newest version of a prompt, active or not. */
+	@Transactional(readOnly = true)
+	public int newestVersion(String code) {
+		int newest = repository.maxVersion(code);
+		if (newest <= 0) {
+			throw new NotFoundException("No prompt " + code + ".");
+		}
+		return newest;
+	}
+
+	private ActivePrompt toActive(Prompt prompt) {
 		Map<String, Object> schema = prompt.getOutputSchema() == null ? null : json.readValue(prompt.getOutputSchema(), SCHEMA);
 		return new ActivePrompt(prompt.getCode(), prompt.getVersion(), prompt.getSystem(), prompt.getTemplate(), schema);
+	}
+
+	private Prompt load(String code, int version) {
+		return repository.findByCodeAndVersion(code, version)
+				.orElseThrow(() -> new NotFoundException("No version " + version + " of prompt " + code + "."));
 	}
 
 	/** Fills in {{name}} variables. A variable without a value is an error, not a blank. */
@@ -77,7 +110,7 @@ public class PromptService {
 
 	@Transactional(readOnly = true)
 	public List<PromptResponse> list() {
-		return repository.findAllByOrderByCodeAscVersionDesc().stream().map(PromptService::toResponse).toList();
+		return repository.findAllByOrderByCodeAscVersionDesc().stream().map(this::toResponse).toList();
 	}
 
 	/** Saved inactive, so what runs today is untouched until someone activates it. The first version of a code is active. */
@@ -92,7 +125,7 @@ public class PromptService {
 		Prompt prompt = new Prompt(code, repository.maxVersion(code) + 1, request.system(), request.template(), schema,
 				clock.instant());
 		if (first) {
-			prompt.activate();
+			prompt.activate(clock.instant());
 		}
 		try {
 			return toResponse(repository.saveAndFlush(prompt));
@@ -102,12 +135,25 @@ public class PromptService {
 		}
 	}
 
+	/**
+	 * Makes this version the one in use. For gated prompts a version that has never been live
+	 * must pass an eval first, so a prompt change is judged by numbers, not by feel. Going back
+	 * to a version that was live before (the rollback) needs no new eval.
+	 *
+	 * @throws BusinessRuleException if the version still needs a passing eval
+	 */
 	@Transactional
 	public PromptResponse activate(String code, int version) {
-		Prompt chosen = repository.findByCodeAndVersion(code, version)
-				.orElseThrow(() -> new NotFoundException("No version " + version + " of prompt " + code + "."));
+		Prompt chosen = load(code, version);
+		if (!chosen.isActive() && chosen.getActivatedAt() == null && evals.gates(code)
+				&& !evalRuns.existsByKindAndPromptCodeAndPromptVersionAndStatusAndPassedTrue(EvalKind.PROMPT, code, version,
+						EvalRunStatus.SUCCEEDED)) {
+			throw new BusinessRuleException("Version " + version + " of " + code + " has not passed an eval yet. Run one with"
+					+ " POST /api/v1/admin/evals/runs {\"kind\": \"PROMPT\", \"promptCode\": \"" + code + "\", \"promptVersion\": "
+					+ version + "} and activate it once it passes.");
+		}
 		repository.findByCodeOrderByVersionDesc(code).forEach(Prompt::deactivate);
-		chosen.activate();
+		chosen.activate(clock.instant());
 		return toResponse(chosen);
 	}
 
@@ -126,11 +172,15 @@ public class PromptService {
 				log.info("Added built-in prompt {}", prompt.code());
 			}
 		}
+		// versions that were live before activation times were kept count as having been live
+		repository.findAll().stream().filter(p -> p.isActive() && p.getActivatedAt() == null)
+				.forEach(p -> p.activate(p.getCreatedAt()));
 	}
 
-	private static PromptResponse toResponse(Prompt prompt) {
+	private PromptResponse toResponse(Prompt prompt) {
 		return new PromptResponse(prompt.getCode(), prompt.getVersion(), prompt.isActive(), prompt.getSystem(),
-				prompt.getTemplate(), prompt.getOutputSchema(), prompt.getCreatedAt());
+				prompt.getTemplate(), prompt.getOutputSchema(), prompt.getCreatedAt(), prompt.getActivatedAt(),
+				evals.gates(prompt.getCode()));
 	}
 
 	private record DefaultPrompt(String code, String system, String template, Map<String, Object> outputSchema) {

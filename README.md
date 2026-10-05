@@ -334,11 +334,51 @@ Every service can run as several instances behind the gateway.
 - The resume is read with AI after upload, in the background: skills the dictionary missed
   are added with years; skills the candidate typed are never changed.
 - **Without AI everything still works**: matching keeps its local scores and says why AI
-  was skipped, jobs stay unparsed until AI is back, and a cover letter answers 503 with
-  the reason.
+  was skipped, jobs stay unparsed until AI is back, and a cover letter comes back as a plain
+  draft from a template, filled only with the candidate's own facts.
 - AI lives in matching-service; job-service and core-api ask it through
   `POST /internal/v1/ai/run`, so providers, fallback, cache, budgets and cost tracking stay
   in one place.
+
+### Semantic matching, RAG and evals
+
+| Endpoint | What it does |
+|---|---|
+| `GET /api/v1/me/skill-gap` | The skills missing from your profile that would bring the most extra matches |
+| `POST /api/v1/me/applications/{id}/cover-letter` | Now built on the parts of your resume that fit the job, with a claim check |
+| `POST /api/v1/me/applications/{id}/screening-answers` | Answers a form's questions from your profile and resume |
+| `GET /api/v1/admin/ai/embeddings` | Which embedding model is in use and how many jobs have vectors |
+| `POST /api/v1/admin/ai/embeddings/reindex` | Embed recent jobs that have no vector for the current model |
+| `POST /api/v1/admin/ai/batch-matching/run` | The nightly batch, now: index catch-up, then rematch active users |
+| `GET/POST/DELETE /api/v1/admin/evals/cases` | The golden set: hand-scored (profile, job) pairs |
+| `POST /api/v1/admin/evals/runs` | Run an eval (202): `MATCHER` (keyword vs hybrid) or `PROMPT` (one prompt version) |
+| `GET /api/v1/admin/evals/runs/{id}` | Its numbers: MAE, Spearman, precision, recall, per-case results |
+
+- **Hybrid matching.** The shortlist is FULLTEXT keyword search plus the jobs nearest in
+  meaning from a vector index, merged by reciprocal rank fusion. A new `semantic` factor
+  scores how close the job's meaning is to your roles and skills, so "Spring Microservices
+  Engineer" now counts for a "Java Backend Developer".
+- **Any embedding model, or none.** Set `embeddingModel` on any provider (OpenAI-compatible,
+  Gemini, Ollama) and it is used; with none, a built-in local embedder (feature hashing plus
+  concept groups, no network, no cost) is. If the chosen provider fails, the local one stands
+  in for that call. Vectors of different models are never compared.
+- **Measured, not guessed.** On the built-in golden set (16 cases), keyword-only scoring is off
+  by 22.3 points on average and finds 3 of 10 real matches; hybrid with the local embedder is
+  off by 19.9 and finds 6 of 10 (F1 0.46 to 0.75). Run `MATCHER` again after changing models.
+- **Prompt changes need numbers.** A new version of `job-fit` can be activated only after a
+  `PROMPT` eval of that version passes (average miss at most 20 points, at least 90% usable
+  answers). Going back to a version that was live before needs no new eval.
+- **RAG.** The resume is cut into chunks by section; for each job or question the best chunks
+  are picked (70% meaning, 30% BM25 keywords) and only those go into the prompt.
+- **Claim check.** Skills, numbers ("5 years", "40%") and employers in an AI letter are checked
+  against the resume and profile; a letter claiming something they don't back is written again,
+  naming what to leave out, and any claim still unbacked is listed in `unsupportedClaims`.
+- **Screening answers.** Questions a profile field answers (notice period, years, location,
+  expected salary) are answered from it, free and exact; the rest go to AI in one call, which
+  must say "not answerable" rather than guess; what's left is marked for the user.
+- **Nightly batch** (02:30 IST): vector index catch-up and a rematch of every active user.
+  Anthropic prompts mark their fixed system part for prompt caching.
+- Why vectors live in MySQL and are searched in memory: [ADR 0001](docs/adr/0001-vector-store.md).
 
 ### File storage
 
@@ -474,6 +514,8 @@ tests route to a fake service, so they need no database. Tests need Redis runnin
 - [x] Phase 14: Kafka events with transactional outbox, idempotent consumers, dead letters, SSE
 - [x] Phase 15: apply-worker, applying in headless Chrome with pacing and crash-safe attempts
 - [x] Phase 16: notification-service, email and Telegram with per-channel dedup and a real daily digest
+- [x] Phase 18: semantic matching (hybrid shortlist, any embedding model or a local one), RAG cover letters
+  and screening answers with a claim check, skill gap, evals that gate prompt changes, nightly batch
 - [ ] Phase 9: Docker, Flyway, Testcontainers
 - [ ] Phases 17–19
 - [ ] Phase 8, last: security (JWT at the gateway, roles, Google sign-in). Nothing is

@@ -30,17 +30,34 @@ public final class MatchContext {
 
 	private final Map<String, Pattern> rolePhrases = new LinkedHashMap<>();
 
-	private MatchContext(MatchingProfile profile, Instant now) {
+	private final SemanticVectors semantic;
+
+	private MatchContext(MatchingProfile profile, Instant now, SemanticVectors semantic) {
 		this.profile = profile;
 		this.now = now;
+		this.semantic = semantic == null ? SemanticVectors.NONE : semantic;
 		profile.skills().forEach(skill -> skills.add(skill.strip().toLowerCase(Locale.ROOT)));
 		profile.preferredLocations().forEach(location -> locationPatterns.put(location, TextMatcher.wordPattern(location)));
 		profile.targetRoles().forEach(role -> rolePhrases.put(role, TextMatcher.wordPattern(role)));
 		this.roleTokens = profile.targetRoles().stream().map(TextMatcher::keyTokens).filter(t -> !t.isEmpty()).toList();
 	}
 
+	/** Keyword matching only. */
 	public static MatchContext of(MatchingProfile profile, Instant now) {
-		return new MatchContext(profile, now);
+		return new MatchContext(profile, now, SemanticVectors.NONE);
+	}
+
+	public static MatchContext of(MatchingProfile profile, Instant now, SemanticVectors semantic) {
+		return new MatchContext(profile, now, semantic);
+	}
+
+	/** The same candidate, with other vectors: for scoring one profile two ways in an eval. */
+	public MatchContext withSemantic(SemanticVectors semantic) {
+		return new MatchContext(profile, now, semantic);
+	}
+
+	public SemanticVectors semantic() {
+		return semantic;
 	}
 
 	public MatchingProfile profile() {

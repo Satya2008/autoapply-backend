@@ -19,4 +19,13 @@ public interface AiClient {
 	/** The models this account can use, as the vendor lists them. */
 	List<String> listModels(ProviderConnection provider);
 
+	/**
+	 * One vector per text, in the same order.
+	 *
+	 * @throws AiProviderException when this API has no embeddings or the reply can't be read
+	 */
+	default AiEmbeddings embed(ProviderConnection provider, String model, List<String> texts) {
+		throw new AiProviderException(type().label() + " has no embeddings API.");
+	}
+
 }

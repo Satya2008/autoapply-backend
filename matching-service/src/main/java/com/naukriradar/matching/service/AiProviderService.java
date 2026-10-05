@@ -54,7 +54,8 @@ public class AiProviderService {
 
 	public List<AiProviderTypeResponse> types() {
 		return Arrays.stream(AiProviderType.values())
-				.map(t -> new AiProviderTypeResponse(t, t.label(), t.defaultBaseUrl(), t.needsApiKey(), t.exampleModels(), t.note()))
+				.map(t -> new AiProviderTypeResponse(t, t.label(), t.defaultBaseUrl(), t.needsApiKey(), t.exampleModels(),
+						t.supportsEmbeddings(), t.exampleEmbeddingModels(), t.note()))
 				.toList();
 	}
 
@@ -81,6 +82,7 @@ public class AiProviderService {
 		}
 		provider.setModel(request.model().strip());
 		provider.setStrongModel(blankToNull(request.strongModel()));
+		provider.setEmbeddingModel(embeddingModel(request.type(), request.embeddingModel()));
 		provider.setEnabled(request.enabled() == null || request.enabled());
 		if (request.timeoutSeconds() != null) {
 			provider.setTimeoutSeconds(request.timeoutSeconds());
@@ -114,6 +116,9 @@ public class AiProviderService {
 		}
 		if (request.strongModel() != null) {
 			provider.setStrongModel(blankToNull(request.strongModel()));
+		}
+		if (request.embeddingModel() != null) {
+			provider.setEmbeddingModel(embeddingModel(provider.getType(), request.embeddingModel()));
 		}
 		if (request.enabled() != null) {
 			provider.setEnabled(request.enabled());
@@ -174,6 +179,19 @@ public class AiProviderService {
 				.toList();
 	}
 
+	/**
+	 * The provider that embeds texts: the first ready one, in the admin's order, that has an
+	 * embedding model. Empty means the built-in local embedder is used.
+	 */
+	@Transactional(readOnly = true)
+	public Optional<Target> embeddingTarget() {
+		return repository.findAllByOrderByPriorityAscNameAsc().stream()
+				.filter(AiProvider::isReadyForEmbeddings)
+				.map(p -> target(p, false).map(t -> new Target(t.connection(), p.getEmbeddingModel(), null, null)))
+				.flatMap(Optional::stream)
+				.findFirst();
+	}
+
 	/** One provider, ready or not: for testing a provider and listing its models. */
 	@Transactional(readOnly = true)
 	public Target target(String name) {
@@ -198,6 +216,9 @@ public class AiProviderService {
 				provider.setBaseUrl(trimSlash(seed.baseUrl()));
 			}
 			provider.setModel(seed.model());
+			if (seed.type().supportsEmbeddings()) {
+				provider.setEmbeddingModel(blankToNull(seed.embeddingModel()));
+			}
 			setKey(provider, seed.apiKey());
 			// switched on only when really set up: a key, or for Ollama an explicit address;
 			// the rest are listed switched off, ready to be given a key
@@ -239,6 +260,14 @@ public class AiProviderService {
 		provider.setApiKey(crypto.encrypt(key, associatedData(provider.getName())), hint);
 	}
 
+	private static String embeddingModel(AiProviderType type, String model) {
+		String chosen = blankToNull(model);
+		if (chosen != null && !type.supportsEmbeddings()) {
+			throw new BadRequestException(type.label() + " has no embeddings API; set the embedding model on another provider.");
+		}
+		return chosen;
+	}
+
 	private static String blankToNull(String value) {
 		return value == null || value.isBlank() ? null : value.strip();
 	}
@@ -266,7 +295,7 @@ public class AiProviderService {
 
 	private static AiProviderResponse toResponse(AiProvider p, boolean primary) {
 		return new AiProviderResponse(p.getName(), p.getType(), p.getBaseUrl(), p.getModel(), p.getStrongModel(),
-				p.isEnabled(), p.isReady(),
+				p.getEmbeddingModel(), p.isEnabled(), p.isReady(),
 				primary, p.getPriority(), p.getApiKey() != null, p.getApiKeyHint(), p.getTimeoutSeconds(), p.getInputPrice(),
 				p.getOutputPrice(), p.getUpdatedAt(), p.getUpdatedBy());
 	}

@@ -1,5 +1,6 @@
 package com.naukriradar.matching.ai;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -25,11 +26,17 @@ public class AnthropicClient extends HttpAiClient {
 
 	@Override
 	public AiCompletion complete(ProviderConnection provider, String model, AiRequest request) {
-		Map<String, Object> body = Map.of(
-				"model", model,
-				"max_tokens", request.maxTokens(),
-				"system", system(request),
-				"messages", List.of(Map.of("role", "user", "content", request.prompt())));
+		Map<String, Object> body = new HashMap<>();
+		body.put("model", model);
+		body.put("max_tokens", request.maxTokens());
+		body.put("messages", List.of(Map.of("role", "user", "content", request.prompt())));
+		String system = system(request);
+		if (!system.isBlank()) {
+			// the system text and schema are the same on every call of a prompt: marked for prompt
+			// caching, repeat calls read them from Anthropic's cache at a tenth of the input price
+			// (the API ignores the mark below its minimum cacheable length)
+			body.put("system", List.of(Map.of("type", "text", "text", system, "cache_control", Map.of("type", "ephemeral"))));
+		}
 		JsonNode reply = client(provider).post()
 				.uri("/v1/messages")
 				.header("x-api-key", provider.apiKey())
@@ -51,7 +58,10 @@ public class AnthropicClient extends HttpAiClient {
 			throw new AiProviderException("The reply has no text.");
 		}
 		JsonNode usage = reply.path("usage");
-		return new AiCompletion(text.toString(), usage.path("input_tokens").asLong(), usage.path("output_tokens").asLong());
+		// cached input is billed differently; counting it at the full price keeps the budget on the safe side
+		long tokensIn = usage.path("input_tokens").asLong() + usage.path("cache_creation_input_tokens").asLong()
+				+ usage.path("cache_read_input_tokens").asLong();
+		return new AiCompletion(text.toString(), tokensIn, usage.path("output_tokens").asLong());
 	}
 
 	@Override

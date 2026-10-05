@@ -70,7 +70,18 @@ public class AiRouter {
 
 	/** @param fresh skip the cache, for "write it again" */
 	public AiResult run(String promptCode, Map<String, String> variables, String userId, boolean fresh) {
-		ActivePrompt prompt = prompts.active(promptCode);
+		return run(prompts.active(promptCode), variables, userId, fresh);
+	}
+
+	/**
+	 * One version of a prompt, active or not: how an eval tries a new version before it goes
+	 * live. Answers are cached per version, so running the same eval again is free.
+	 */
+	public AiResult runVersion(String promptCode, int version, Map<String, String> variables) {
+		return run(prompts.version(promptCode, version), variables, null, false);
+	}
+
+	private AiResult run(ActivePrompt prompt, Map<String, String> variables, String userId, boolean fresh) {
 		AiRequest request = request(prompt, variables, userId);
 		String key = AiResultCache.key(prompt, request);
 		if (!fresh && properties.enabled()) {
@@ -79,7 +90,7 @@ public class AiRouter {
 				return cached;
 			}
 		}
-		AiResult result = complete(request, providers.targets(properties.strongPurposes().contains(promptCode)));
+		AiResult result = complete(request, providers.targets(properties.strongPurposes().contains(prompt.code())));
 		cache.put(key, result);
 		return result;
 	}

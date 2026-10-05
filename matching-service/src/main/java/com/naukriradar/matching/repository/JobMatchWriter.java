@@ -11,10 +11,10 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.TimeZone;
-import java.util.UUID;
 
 import com.naukriradar.matching.client.CandidateJob;
 import com.naukriradar.matching.model.MatchStatus;
+import com.naukriradar.matching.util.UuidV7;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Repository;
@@ -103,7 +103,7 @@ public class JobMatchWriter {
 	private static void bind(PreparedStatement ps, String userId, ScoredJob match, Instant now) throws SQLException {
 		CandidateJob job = match.job();
 		int i = 1;
-		ps.setString(i++, uuidV7(now));
+		ps.setString(i++, UuidV7.at(now));
 		ps.setString(i++, userId);
 		ps.setString(i++, job.id());
 		ps.setInt(i++, match.score());
@@ -130,14 +130,6 @@ public class JobMatchWriter {
 
 	private static String truncate(String value, int max) {
 		return value == null || value.length() <= max ? value : value.substring(0, max);
-	}
-
-	/** Time-ordered UUID (version 7), matching what Hibernate generates for entities. */
-	private static String uuidV7(Instant at) {
-		long random = UUID.randomUUID().getLeastSignificantBits();
-		long mostSig = (at.toEpochMilli() << 16) | (0x7L << 12) | (random & 0xFFF);
-		long leastSig = 0x8000_0000_0000_0000L | (UUID.randomUUID().getMostSignificantBits() & 0x3FFF_FFFF_FFFF_FFFFL);
-		return new UUID(mostSig, leastSig).toString();
 	}
 
 	public record ScoredJob(CandidateJob job, int score, String breakdownJson) {

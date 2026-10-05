@@ -106,7 +106,7 @@ class MatchControllerIT {
 		mvc.perform(get("/api/v1/me/matches/" + bestId).header(USER_HEADER, user))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.match.score").value(100))
-				.andExpect(jsonPath("$.breakdown", hasSize(6)))
+				.andExpect(jsonPath("$.breakdown", hasSize(7)))
 				.andExpect(jsonPath("$.breakdown[0].factor").value("skills"))
 				.andExpect(jsonPath("$.breakdown[0].detail").value(startsWith("Mentions 3 of your skills")));
 
