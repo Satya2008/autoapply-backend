@@ -75,6 +75,18 @@ class ProfileControllerIT {
 	}
 
 	@Test
+	void anExistingUserIsFoundByEmailForSignIn() throws Exception {
+		String email = uniqueEmail();
+		String id = createUser(email);
+
+		mvc.perform(get("/api/v1/dev/users").param("email", email.toUpperCase()))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.id").value(id));
+		mvc.perform(get("/api/v1/dev/users").param("email", uniqueEmail())).andExpect(status().isNotFound());
+		mvc.perform(get("/api/v1/dev/users").param("email", "not-an-email")).andExpect(status().isBadRequest());
+	}
+
+	@Test
 	void updatedProfileIsStoredAndNormalised() throws Exception {
 		String userId = createUser();
 

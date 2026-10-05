@@ -3,6 +3,7 @@ package com.naukriradar.core.service;
 import java.util.Locale;
 
 import com.naukriradar.common.exception.ConflictException;
+import com.naukriradar.common.exception.NotFoundException;
 import com.naukriradar.core.dto.request.CreateUserRequest;
 import com.naukriradar.core.dto.response.UserResponse;
 import com.naukriradar.core.mapper.ProfileMapper;
@@ -40,6 +41,13 @@ public class UserService {
 		}
 		profileRepository.save(new Profile(user));
 		return mapper.toResponse(user);
+	}
+
+	/** Dev sign-in until Phase 8: the user with this email, matched case-insensitively. */
+	@Transactional(readOnly = true)
+	public UserResponse findByEmail(String email) {
+		return userRepository.findByEmail(email.strip().toLowerCase(Locale.ROOT)).map(mapper::toResponse)
+				.orElseThrow(() -> new NotFoundException("No user with this email."));
 	}
 
 	private static ConflictException duplicateEmail() {

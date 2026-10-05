@@ -4,12 +4,16 @@ import com.naukriradar.core.dto.request.CreateUserRequest;
 import com.naukriradar.core.dto.response.UserResponse;
 import com.naukriradar.core.service.UserService;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Profile;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -26,6 +30,12 @@ public class DevUserController {
 	@ResponseStatus(HttpStatus.CREATED)
 	public UserResponse create(@Valid @RequestBody CreateUserRequest request) {
 		return userService.createUser(request);
+	}
+
+	/** Finds a user by email, so the web app can sign an existing user in. */
+	@GetMapping
+	public UserResponse find(@RequestParam @NotBlank @Email String email) {
+		return userService.findByEmail(email);
 	}
 
 }
