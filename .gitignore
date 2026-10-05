@@ -17,3 +17,6 @@ bin/
 # Uploaded files in dev
 data/
 logs/
+
+# Redis writes its snapshot where it was started
+dump.rdb
