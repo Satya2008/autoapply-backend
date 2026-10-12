@@ -53,6 +53,19 @@ public class JobSource {
 	@Column(nullable = false, length = 20)
 	private SourceType type;
 
+	/**
+	 * Where the board's jobs are: IN (India) or GLOBAL (international), so sources can be switched on and off
+	 * and jobs filtered by region. Null on rows from before regions; read as {@link #GLOBAL}.
+	 */
+	@Column(length = 10)
+	private String region;
+
+	public static final String GLOBAL = "GLOBAL";
+
+	public String getRegion() {
+		return region == null ? GLOBAL : region;
+	}
+
 	@Column(nullable = false, length = 500)
 	private String baseUrl;
 
@@ -101,6 +114,9 @@ public class JobSource {
 
 	/** Pages requested per run; fetching stops early when a page comes back empty. */
 	private int maxPages;
+
+	/** Scheduled runs skip the source until this many hours after its last run; null: every run. */
+	private Integer fetchEveryHours;
 
 	private Instant lastRunAt;
 

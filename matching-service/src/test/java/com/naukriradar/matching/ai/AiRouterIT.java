@@ -141,10 +141,10 @@ class AiRouterIT {
 			assertThat(result.fallbacks()).isEqualTo(1);
 		}
 
-		// 3 attempts per run until 10 failures open the circuit; after that "down" isn't called
+		// 3 attempts per run until 10 failures open the circuit (one per model); after that "down" isn't called
 		assertThat(vendors.findAll(postRequestedFor(urlPathEqualTo("/down/v1/messages")))).hasSize(10);
 		String states = mvc.perform(adminGet("/api/v1/admin/resilience")).andReturn().getResponse().getContentAsString();
-		List<String> downState = JsonPath.read(states, "$[?(@.name == 'ai-down')].state");
+		List<String> downState = JsonPath.read(states, "$[?(@.name =~ /ai-down-.*/)].state");
 		assertThat(downState).containsExactly("OPEN");
 	}
 

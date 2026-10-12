@@ -12,6 +12,7 @@ bin/
 
 # Local secrets and logs
 .env
+config/*-secrets.properties
 *.log
 
 # Uploaded files in dev

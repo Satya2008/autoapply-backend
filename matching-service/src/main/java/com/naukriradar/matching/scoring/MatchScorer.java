@@ -71,6 +71,10 @@ public class MatchScorer {
 				continue;
 			}
 			int weight = weights.get(factor.name());
+			if (weight == 0) {
+				// switched off: it can't move the score, so it isn't shown either
+				continue;
+			}
 			FactorResult result = factor.score(context, job);
 			double points = 100.0 * weight * result.score() / total;
 			sum += points;

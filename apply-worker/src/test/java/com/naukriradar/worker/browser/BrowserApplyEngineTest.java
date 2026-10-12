@@ -98,7 +98,7 @@ class BrowserApplyEngineTest {
 
 	private static BrowserProperties properties() {
 		return new BrowserProperties(1, true, Duration.ofSeconds(20), Duration.ofSeconds(2), Duration.ofSeconds(4), null,
-				Path.of("build/test-screenshots"));
+				Path.of("build/test-screenshots"), Path.of("build/test-profile"), 9333, false);
 	}
 
 	private static FakePortal startPortal() {

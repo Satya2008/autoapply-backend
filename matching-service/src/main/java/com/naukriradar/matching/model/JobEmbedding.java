@@ -32,7 +32,7 @@ public class JobEmbedding {
 	@Column(name = "job_id", nullable = false, length = 36)
 	private String jobId;
 
-	/** provider type and model, e.g. "openai:text-embedding-3-small" or "local:hashing-v1" */
+	/** provider type and model, e.g. "openai:text-embedding-3-small" or "local:hashing-v2" */
 	@Column(name = "model_key", nullable = false, length = 120)
 	private String modelKey;
 

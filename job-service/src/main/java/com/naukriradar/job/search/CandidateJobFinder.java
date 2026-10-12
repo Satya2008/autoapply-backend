@@ -61,17 +61,29 @@ public class CandidateJobFinder {
 				.addValue("since", LocalDateTime.ofInstant(clock.instant().minus(Duration.ofDays(query.daysOrDefault())), ZoneOffset.UTC))
 				.addValue("limit", query.limitOrDefault());
 		String words = words(query.keywords());
+		// the candidate's hard rules, so the shortlist is spent on jobs that can be shown
+		StringBuilder rules = new StringBuilder();
+		String required = words(query.requiredOrNone());
+		if (!required.isEmpty()) {
+			// boolean mode without "+": any one of the words is enough
+			params.addValue("required", required);
+			rules.append(" AND MATCH(title, company, description) AGAINST (:required IN BOOLEAN MODE)");
+		}
+		if (query.indiaOrRemoteOnly()) {
+			params.addValue("india", LocationTerms.parse("india").regexp());
+			rules.append(" AND (remote = 1 OR LOWER(location) REGEXP :india OR LOWER(location) LIKE '%remote%')");
+		}
 		String sql;
 		if (words.isEmpty()) {
 			// nothing to rank by: newest jobs are the best guess
-			sql = "SELECT " + COLUMNS + " FROM jobs WHERE status = 'ACTIVE' AND sort_at >= :since"
+			sql = "SELECT " + COLUMNS + " FROM jobs WHERE status = 'ACTIVE' AND sort_at >= :since" + rules
 					+ " ORDER BY sort_at DESC, id DESC LIMIT :limit";
 		}
 		else {
 			params.addValue("words", words);
 			sql = "SELECT " + COLUMNS + ", MATCH(title, company, description) AGAINST (:words) AS relevance"
 					+ " FROM jobs WHERE status = 'ACTIVE' AND sort_at >= :since"
-					+ " AND MATCH(title, company, description) AGAINST (:words)"
+					+ " AND MATCH(title, company, description) AGAINST (:words)" + rules
 					+ " ORDER BY relevance DESC, sort_at DESC, id DESC LIMIT :limit";
 		}
 		return jdbc.query(sql, params, (rs, n) -> row(rs));

@@ -29,11 +29,21 @@ public class JobServiceClient {
 
 	/** Active jobs most relevant to the keywords, newest first among equals. */
 	public List<CandidateJob> candidates(List<String> keywords, int postedWithinDays, int limit) {
+		return candidates(keywords, List.of(), false, postedWithinDays, limit);
+	}
+
+	/**
+	 * @param required the job must mention at least one of these; empty for no rule
+	 * @param indiaOrRemote only jobs in India, or remote ones
+	 */
+	public List<CandidateJob> candidates(List<String> keywords, List<String> required, boolean indiaOrRemote,
+			int postedWithinDays, int limit) {
 		try {
 			List<CandidateJob> jobs = resilience.call("job-service", () -> restClient.post()
 					.uri("/internal/v1/jobs/candidates")
 					.contentType(MediaType.APPLICATION_JSON)
-					.body(Map.of("keywords", keywords, "postedWithinDays", postedWithinDays, "limit", limit))
+					.body(Map.of("keywords", keywords, "required", required, "indiaOrRemote", indiaOrRemote,
+							"postedWithinDays", postedWithinDays, "limit", limit))
 					.retrieve()
 					.body(CANDIDATES));
 			return jobs == null ? List.of() : jobs;

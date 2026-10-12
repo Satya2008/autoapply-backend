@@ -14,6 +14,11 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * @param successTimeout how long after submitting to wait for the portal's success sign
  * @param chromeBinary path to Chrome when it isn't in the usual place; empty to let Selenium find it
  * @param screenshots where screenshots of failed attempts go
+ * @param userProfile the Chrome profile of the window handed to the user ("Fill & Review"): a site
+ *     the user logs in to there stays logged in next time
+ * @param userDebugPort local port of that window, so later forms open as tabs in it
+ * @param humanPace fill forms at a person's pace (pointer moves, letter-by-letter typing, pauses);
+ *     off only for tests
  */
 @ConfigurationProperties("naukriradar.browser")
 public record BrowserProperties(
@@ -23,5 +28,8 @@ public record BrowserProperties(
 		@DefaultValue("5s") Duration fieldTimeout,
 		@DefaultValue("15s") Duration successTimeout,
 		String chromeBinary,
-		@DefaultValue("./data/screenshots") Path screenshots) {
+		@DefaultValue("./data/screenshots") Path screenshots,
+		@DefaultValue("./data/chrome-profile") Path userProfile,
+		@DefaultValue("9333") int userDebugPort,
+		@DefaultValue("true") boolean humanPace) {
 }

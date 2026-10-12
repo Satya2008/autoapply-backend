@@ -21,6 +21,7 @@ public record JobSourceRequest(
 		String code,
 		@NotBlank @Size(max = 100) String name,
 		@NotNull SourceType type,
+		@Pattern(regexp = "IN|GLOBAL", message = "must be IN (India) or GLOBAL (international)") String region,
 		@NotBlank @Size(max = 500) String baseUrl,
 		@Size(max = 500) String searchPath,
 		@NotNull RequestMethod method,
@@ -32,5 +33,8 @@ public record JobSourceRequest(
 		boolean enabled,
 		@Min(0) @Max(1000) int priority,
 		@Min(1) @Max(60) int timeoutSeconds,
-		@Min(1) @Max(20) int maxPages) {
+		@Min(1) @Max(20) int maxPages,
+		// scheduled runs skip the source until this many hours have passed since its last run (a
+		// paid API with a small free quota); null: every scheduled run
+		@Min(1) @Max(720) Integer fetchEveryHours) {
 }

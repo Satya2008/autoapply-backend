@@ -15,11 +15,17 @@ public record JobSearchRequest(
 		@Size(max = 100) String location,
 		Boolean remote,
 		@Size(max = 40) String source,
+		@Size(max = 10) String region,
 		@Min(1) @Max(365) Integer postedWithinDays,
 		@Size(max = 200) String cursor,
 		@Min(1) @Max(100) Integer limit) {
 
 	public static final int DEFAULT_LIMIT = 20;
+
+	/** The same search without a source filter (users may not pick sources). */
+	public JobSearchRequest withoutSource() {
+		return new JobSearchRequest(q, location, remote, null, region, postedWithinDays, cursor, limit);
+	}
 
 	public int limitOrDefault() {
 		return limit == null ? DEFAULT_LIMIT : limit;

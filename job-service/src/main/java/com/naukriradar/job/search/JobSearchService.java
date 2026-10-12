@@ -8,6 +8,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
 import java.util.TimeZone;
@@ -58,18 +59,39 @@ public class JobSearchService {
 		MapSqlParameterSource params = new MapSqlParameterSource().addValue("status", JobStatus.ACTIVE.name());
 		StringBuilder sql = new StringBuilder("SELECT " + COLUMNS + " FROM jobs WHERE status = :status");
 
-		SearchTerms terms = SearchTerms.parse(request.q());
-		if (terms.fullText() != null) {
-			sql.append(" AND MATCH(title, company, description) AGAINST (:fullText IN BOOLEAN MODE)");
-			params.addValue("fullText", terms.fullText());
+		// "java, spring boot" is two keywords: a job matching either is found; the words of one keyword all must match
+		List<String> keywords = new ArrayList<>();
+		List<SearchTerms> groups = SearchTerms.groups(request.q());
+		for (int g = 0; g < groups.size(); g++) {
+			SearchTerms terms = groups.get(g);
+			List<String> parts = new ArrayList<>();
+			if (terms.fullText() != null) {
+				parts.add("MATCH(title, company, description) AGAINST (:fullText" + g + " IN BOOLEAN MODE)");
+				params.addValue("fullText" + g, terms.fullText());
+			}
+			for (int i = 0; i < terms.titlePatterns().size(); i++) {
+				parts.add("title REGEXP :titlePattern" + g + "_" + i);
+				params.addValue("titlePattern" + g + "_" + i, terms.titlePatterns().get(i));
+			}
+			if (!parts.isEmpty()) {
+				keywords.add(String.join(" AND ", parts));
+			}
 		}
-		for (int i = 0; i < terms.titlePatterns().size(); i++) {
-			sql.append(" AND title REGEXP :titlePattern").append(i);
-			params.addValue("titlePattern" + i, terms.titlePatterns().get(i));
+		if (keywords.size() == 1) {
+			sql.append(" AND ").append(keywords.get(0));
 		}
-		if (hasText(request.location())) {
-			sql.append(" AND location LIKE :location ESCAPE '!'");
-			params.addValue("location", "%" + escapeLike(request.location().strip()) + "%");
+		else if (keywords.size() > 1) {
+			sql.append(" AND ((").append(String.join(") OR (", keywords)).append("))");
+		}
+		LocationTerms place = LocationTerms.parse(request.location());
+		if (place != null) {
+			sql.append(place.remote() ? " AND (remote = TRUE OR REGEXP_LIKE(location, :place, 'i'))"
+					: " AND REGEXP_LIKE(location, :place, 'i')");
+			params.addValue("place", place.regexp());
+		}
+		else if (hasText(request.location())) {
+			// only symbols were typed: nothing is in such a place
+			sql.append(" AND 1 = 0");
 		}
 		if (request.remote() != null) {
 			sql.append(" AND remote = :remote");
@@ -78,6 +100,11 @@ public class JobSearchService {
 		if (hasText(request.source())) {
 			sql.append(" AND source_code = :source");
 			params.addValue("source", request.source().strip());
+		}
+		if (hasText(request.region())) {
+			// sources from before regions have none and count as GLOBAL
+			sql.append(" AND source_code IN (SELECT code FROM job_sources WHERE COALESCE(region, 'GLOBAL') = :region)");
+			params.addValue("region", request.region().strip());
 		}
 		if (request.postedWithinDays() != null) {
 			sql.append(" AND sort_at >= :since");
@@ -162,11 +189,6 @@ public class JobSearchService {
 	/** DATETIME columns hold UTC wall-clock time; a LocalDateTime is bound as is, with no zone shift. */
 	private static LocalDateTime utc(Instant instant) {
 		return LocalDateTime.ofInstant(instant, ZoneOffset.UTC);
-	}
-
-	/** % and _ in user input are literal, not wildcards. */
-	private static String escapeLike(String value) {
-		return value.replace("!", "!!").replace("%", "!%").replace("_", "!_");
 	}
 
 	private static boolean hasText(String value) {

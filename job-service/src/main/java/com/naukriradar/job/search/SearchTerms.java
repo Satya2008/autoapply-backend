@@ -72,6 +72,23 @@ public final class SearchTerms {
 		return new SearchTerms(fullText, new ArrayList<>(patterns));
 	}
 
+	/** Comma-separated keywords, each parsed on its own; a job matching any one of them is a hit. */
+	public static List<SearchTerms> groups(String query) {
+		List<SearchTerms> groups = new ArrayList<>();
+		if (query == null || query.isBlank()) {
+			return groups;
+		}
+		for (String keyword : query.split(",")) {
+			if (groups.size() >= MAX_TERMS) {
+				break;
+			}
+			if (!keyword.isBlank()) {
+				groups.add(parse(keyword));
+			}
+		}
+		return groups;
+	}
+
 	/** Boolean-mode query with every word required, or null if there are no plain words. */
 	public String fullText() {
 		return fullText;

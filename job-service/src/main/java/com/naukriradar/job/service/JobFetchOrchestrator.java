@@ -23,6 +23,7 @@ import com.naukriradar.common.redis.lock.LockUnavailableException;
 import com.naukriradar.common.redis.run.RunLeases;
 import com.naukriradar.job.dto.response.FetchResultResponse;
 import com.naukriradar.job.dto.response.FetchRunResponse;
+import com.naukriradar.job.model.JobSource;
 import com.naukriradar.job.model.RunStatus;
 import com.naukriradar.job.model.RunTrigger;
 import com.naukriradar.job.repository.JobSourceRepository;
@@ -97,7 +98,7 @@ public class JobFetchOrchestrator {
 			currentRun.set(runId);
 			leases.begin(FetchRunService.LEASE, runId);
 			String id = runId;
-			Thread.ofVirtual().name("fetch-run-" + runId).start(() -> execute(id, runLock));
+			Thread.ofVirtual().name("fetch-run-" + runId).start(() -> execute(id, runLock, trigger));
 			return runService.get(runId);
 		}
 		catch (RuntimeException ex) {
@@ -114,9 +115,26 @@ public class JobFetchOrchestrator {
 		return currentRun.get() != null;
 	}
 
-	private void execute(String runId, LockHandle runLock) {
+	/**
+	 * Whether a scheduled run should fetch this source: always, unless it asks for fewer runs and
+	 * its last one is too recent. A few minutes of slack, so "every 24 hours" still runs at the
+	 * same time each day although the last run ended a little after it started.
+	 */
+	static boolean due(JobSource source, Instant now) {
+		if (source.getFetchEveryHours() == null || source.getLastRunAt() == null) {
+			return true;
+		}
+		return !source.getLastRunAt().plus(Duration.ofHours(source.getFetchEveryHours())).minus(DUE_SLACK).isAfter(now);
+	}
+
+	private static final Duration DUE_SLACK = Duration.ofMinutes(30);
+
+	private void execute(String runId, LockHandle runLock, RunTrigger trigger) {
 		try {
+			Instant now = clock.instant();
 			List<SourceRef> sources = sourceRepository.findByEnabledTrueOrderByPriorityDescCodeAsc().stream()
+					// a source with a small quota waits its own interval; "fetch now" by hand runs everything
+					.filter(s -> trigger == RunTrigger.MANUAL || due(s, now))
 					.map(s -> new SourceRef(s.getId(), s.getCode(),
 							Duration.ofSeconds((long) s.getTimeoutSeconds() * s.getMaxPages()).plus(DEADLINE_MARGIN)))
 					.toList();

@@ -34,7 +34,33 @@ import tools.jackson.databind.json.JsonMapper;
 @Component
 public class HashingEmbedder {
 
-	public static final String MODEL_KEY = "local:hashing-v1";
+	/**
+	 * v2: labelled lines are weighted (see {@link #SECTION_WEIGHTS}), so a long job description
+	 * no longer drowns the role and skills. v1 vectors are re-made under the new key.
+	 */
+	public static final String MODEL_KEY = "local:hashing-v2";
+
+	/**
+	 * How much each labelled line of {@link EmbeddingTexts} counts. The role says most about a
+	 * job, its skills next; the free-text description mostly talks about the company, so its
+	 * ordinary words count little, while the known terms in it (java, kafka...) count in full.
+	 * Unlabelled text (resume passages) is weighted 1 throughout, as in v1.
+	 */
+	private static final Map<String, Double> SECTION_WEIGHTS = Map.of("role", 3.0, "roles", 3.0, "skills", 2.0,
+			"seniority", 1.0, "about", 0.25);
+
+	/** A known term (a concept phrase) found in free text counts like a listed skill. */
+	private static final double KNOWN_TERM_WEIGHT = 1.0;
+
+	/**
+	 * Words nearly every job title has. Weighted up with the role they would make a "Java
+	 * Developer" look like a "JavaScript Developer", so they keep a small part of their weight.
+	 */
+	private static final Set<String> GENERIC_TITLE_WORDS = Set.of("developer", "developers", "engineer", "engineers",
+			"senior", "junior", "lead", "principal", "staff", "software", "associate", "sr", "jr", "intern", "specialist",
+			"consultant", "manager", "executive", "analyst", "ii", "iii", "iv", "m", "w", "d", "f", "h");
+
+	private static final double GENERIC_WORD_FACTOR = 0.2;
 
 	static final int DIMENSIONS = 512;
 
@@ -70,21 +96,51 @@ public class HashingEmbedder {
 			return vector;
 		}
 		String lower = text.toLowerCase(Locale.ROOT);
-		List<String> words = words(lower);
-		Map<String, Integer> counts = new HashMap<>();
-		words.forEach(word -> counts.merge("w:" + word, 1, Integer::sum));
-		for (int i = 1; i < words.size(); i++) {
-			counts.merge("p:" + words.get(i - 1) + " " + words.get(i), 1, Integer::sum);
+		for (String line : lower.split("\\R")) {
+			String body = line;
+			double weight = 1.0;
+			int colon = line.indexOf(':');
+			if (colon > 0) {
+				Double labelled = SECTION_WEIGHTS.get(line.substring(0, colon).strip());
+				if (labelled != null) {
+					weight = labelled;
+					body = line.substring(colon + 1);
+				}
+			}
+			addWords(vector, words(body), weight);
+			if (weight < KNOWN_TERM_WEIGHT) {
+				// in free text, the terms we know are the signal: give them their full weight
+				for (List<String> phrases : concepts.values()) {
+					for (String phrase : phrases) {
+						if (containsWord(body, phrase)) {
+							addWords(vector, words(phrase), KNOWN_TERM_WEIGHT - weight);
+						}
+					}
+				}
+			}
 		}
-		// a word said ten times isn't ten times as important: 1 + ln(count)
-		counts.forEach((feature, count) -> add(vector, feature,
-				(feature.startsWith("p:") ? PAIR_WEIGHT : 1.0) * (1 + Math.log(count))));
 		concepts.forEach((concept, phrases) -> {
 			if (phrases.stream().anyMatch(phrase -> containsWord(lower, phrase))) {
 				add(vector, "c:" + concept, CONCEPT_WEIGHT);
 			}
 		});
 		return Vectors.normalize(vector);
+	}
+
+	/** Words and neighbouring pairs; a word said ten times isn't ten times as important: 1 + ln(count). */
+	private static void addWords(float[] vector, List<String> words, double weight) {
+		Map<String, Integer> counts = new HashMap<>();
+		words.forEach(word -> counts.merge("w:" + word, 1, Integer::sum));
+		for (int i = 1; i < words.size(); i++) {
+			counts.merge("p:" + words.get(i - 1) + " " + words.get(i), 1, Integer::sum);
+		}
+		counts.forEach((feature, count) -> {
+			double featureWeight = weight * (feature.startsWith("p:") ? PAIR_WEIGHT : 1.0) * (1 + Math.log(count));
+			if (weight > 1.0 && feature.startsWith("w:") && GENERIC_TITLE_WORDS.contains(feature.substring(2))) {
+				featureWeight *= GENERIC_WORD_FACTOR;
+			}
+			add(vector, feature, featureWeight);
+		});
 	}
 
 	/** Lower-case content words, in order: no stop words, and no single letters except the languages C and R. */

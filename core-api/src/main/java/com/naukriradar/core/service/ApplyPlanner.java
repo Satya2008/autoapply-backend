@@ -121,6 +121,29 @@ public class ApplyPlanner {
 		return new PlanResult(unique.size(), queued, needsYou, alreadyApplied, belowScore, deferred);
 	}
 
+	/**
+	 * One match the user chose to apply to now ("Fill for me" on a match): it waits for them,
+	 * never for the engine, whatever the site, since they are about to fill it themselves. An
+	 * application they already have for the job is returned as it is.
+	 */
+	@Transactional
+	public Application planOne(String userId, MatchForApply match) {
+		return applicationRepository.findByUserIdAndJobId(userId, match.jobId()).orElseGet(() -> {
+			Profile profile = profileRepository.findForUpdate(userId)
+					.orElseThrow(() -> new NotFoundException("No profile for user " + userId + "."));
+			RiskClassifier.Risk risk = riskClassifier.rules().classify(match.applyUrl(), portalRepository.findByEnabledTrue());
+			String prefill = jsonMapper.writeValueAsString(prefillService.answers(profile));
+			Application application = applicationRepository.save(new Application(userId, match.jobId(),
+					truncate(match.title(), 300), truncate(match.company(), 200), truncate(match.location(), 200),
+					match.applyUrl(), match.score(), risk.band(), truncate(risk.reason(), 300), prefill));
+			stateMachine.created(application, "You chose this match.");
+			String reason = "You chose to apply to this one.";
+			stateMachine.move(application, ApplicationStatus.NEEDS_YOU, reason);
+			application.needsYouBecause(reason);
+			return application;
+		});
+	}
+
 	/** Null when the application can go to the engine; otherwise why the user must apply. */
 	private String needsYouReason(Profile profile, RiskClassifier.Risk risk, long automatedToday) {
 		if (risk.band() != RiskBand.LOW) {

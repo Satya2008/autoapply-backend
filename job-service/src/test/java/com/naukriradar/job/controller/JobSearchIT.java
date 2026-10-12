@@ -28,6 +28,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
+import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.startsWith;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -84,6 +85,15 @@ class JobSearchIT {
 	}
 
 	@Test
+	void commaSeparatedKeywordsFindJobsMatchingAnyOfThem() throws Exception {
+		search(Map.of("q", "go, c#")).andExpect(jsonPath("$.items[*].title", containsInAnyOrder("Go Developer", "C# .NET Developer")));
+		// the words of one keyword still all must match
+		search(Map.of("q", "java senior, golang")).andExpect(jsonPath("$.items[*].title",
+				containsInAnyOrder("Senior Java Engineer", "Golang Engineer")));
+		search(Map.of("q", "java, ,")).andExpect(jsonPath("$.items[*].title", contains("Java Backend Developer", "Senior Java Engineer")));
+	}
+
+	@Test
 	void shortAndSymbolTermsStillWork() throws Exception {
 		search(Map.of("q", "go")).andExpect(jsonPath("$.items[*].title", contains("Go Developer")));
 		search(Map.of("q", "c#")).andExpect(jsonPath("$.items[*].title", contains("C# .NET Developer")));
@@ -104,6 +114,42 @@ class JobSearchIT {
 				containsInAnyOrder("Senior Java Engineer", "Golang Engineer", "100% Remote QA_Lead")));
 		search(Map.of("postedWithinDays", "7", "remote", "false")).andExpect(jsonPath("$.items[*].title",
 				contains("Java Backend Developer", "JavaScript Developer", "Go Developer")));
+	}
+
+	@Test
+	void locationsMatchFromAWordStartAndKnowPlaceNames() throws Exception {
+		save(TestJobs.job("j8", "Backend Engineer", "Minden Co", "Minden, Germany", false, daysAgo(5)),
+				TestJobs.job("j9", "Platform Engineer", "Noida Co", "Noida, Uttar Pradesh", false, daysAgo(6)));
+
+		// "ind" starts the word India, but sits inside Minden
+		search(Map.of("location", "ind")).andExpect(jsonPath("$.items[*].title", contains("Java Backend Developer")));
+		// India also means Indian cities written without the country
+		search(Map.of("location", "India")).andExpect(jsonPath("$.items[*].title", containsInAnyOrder("Java Backend Developer",
+				"JavaScript Developer", "Go Developer", "C# .NET Developer", "Platform Engineer")));
+		search(Map.of("location", "bangalore")).andExpect(jsonPath("$.items[*].title", contains("JavaScript Developer")));
+		search(Map.of("location", "Delhi NCR")).andExpect(jsonPath("$.items[*].title", contains("Platform Engineer")));
+		// half of the old name already finds the new one
+		search(Map.of("location", "banga")).andExpect(jsonPath("$.items[*].title", contains("JavaScript Developer")));
+		// remote also finds jobs flagged remote whatever their location says
+		search(Map.of("location", "remote")).andExpect(jsonPath("$.items[*].title",
+				containsInAnyOrder("Senior Java Engineer", "Golang Engineer", "100% Remote QA_Lead")));
+	}
+
+	@Test
+	void suggestsPlacesAndKeywordsFromAWordStart() throws Exception {
+		save(TestJobs.job("j10", "Data Engineer", "Gurg Co", "gurugram, Haryana", false, daysAgo(2)));
+		// the old name finds the new one, shown with a capital
+		mvc.perform(get("/api/v1/jobs/suggest/locations").param("q", "gurg"))
+				.andExpect(jsonPath("$[*].label", hasItem("Gurugram")));
+		mvc.perform(get("/api/v1/jobs/suggest/locations").param("q", "pu"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$[*].label", hasItem("Pune")));
+		mvc.perform(get("/api/v1/jobs/suggest/locations").param("q", "ind"))
+				.andExpect(jsonPath("$[0].label").value("India"));
+		mvc.perform(get("/api/v1/jobs/suggest/keywords").param("q", "jav"))
+				.andExpect(jsonPath("$[*].label", hasItem("Java")))
+				.andExpect(jsonPath("$[*].label", hasItem("Java Backend Developer")));
+		mvc.perform(get("/api/v1/jobs/suggest/keywords").param("q", "j")).andExpect(jsonPath("$", hasSize(0)));
 	}
 
 	@Test

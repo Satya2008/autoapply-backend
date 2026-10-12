@@ -24,7 +24,9 @@ public enum JobField {
 	POSTED_AT("postedAt", false),
 	SALARY_MIN("salaryMin", false),
 	SALARY_MAX("salaryMax", false),
-	CURRENCY("currency", false);
+	CURRENCY("currency", false),
+	/** Other links to the same job (aggregators list several); the one easiest to apply on wins over applyUrl. */
+	APPLY_OPTIONS("applyOptions", false);
 
 	private static final Map<String, JobField> BY_KEY = Arrays.stream(values())
 			.collect(Collectors.toMap(JobField::getKey, Function.identity()));

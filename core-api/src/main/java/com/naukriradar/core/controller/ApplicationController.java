@@ -3,6 +3,7 @@ package com.naukriradar.core.controller;
 import java.net.URI;
 import java.util.List;
 
+import com.naukriradar.common.exception.NotFoundException;
 import com.naukriradar.common.security.CurrentUserProvider;
 import com.naukriradar.core.dto.request.ScreeningQuestionsRequest;
 import com.naukriradar.core.dto.request.StatusUpdateRequest;
@@ -11,18 +12,26 @@ import com.naukriradar.core.dto.response.ApplicationPageResponse;
 import com.naukriradar.core.dto.response.ApplicationStatsResponse;
 import com.naukriradar.core.dto.response.ApplyRunResponse;
 import com.naukriradar.core.dto.response.CoverLetterResponse;
+import com.naukriradar.core.dto.response.FillReviewResponse;
+import com.naukriradar.core.dto.response.MatchFillResponse;
+import com.naukriradar.core.dto.response.MatchOpenResponse;
 import com.naukriradar.core.dto.response.NeedsYouResponse;
 import com.naukriradar.core.dto.response.ScreeningAnswersResponse;
+import com.naukriradar.core.dto.response.TailoredResumeResponse;
 import com.naukriradar.core.model.ApplicationStatus;
 import com.naukriradar.core.service.ApplicationService;
 import com.naukriradar.core.service.ApplyProgressStreams;
 import com.naukriradar.core.service.ApplyRunService;
+import com.naukriradar.core.service.FillReviewService;
 import com.naukriradar.core.service.RagCoverLetterService;
 import com.naukriradar.core.service.ScreeningAnswerService;
+import com.naukriradar.core.service.TailoredResumeService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Size;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -45,16 +54,20 @@ public class ApplicationController {
 	private final RagCoverLetterService coverLetters;
 	private final ScreeningAnswerService screeningAnswers;
 	private final ApplyProgressStreams streams;
+	private final FillReviewService fillReview;
+	private final TailoredResumeService tailoredResumes;
 
 	public ApplicationController(CurrentUserProvider currentUser, ApplyRunService runService,
 			ApplicationService applicationService, RagCoverLetterService coverLetters, ScreeningAnswerService screeningAnswers,
-			ApplyProgressStreams streams) {
+			ApplyProgressStreams streams, FillReviewService fillReview, TailoredResumeService tailoredResumes) {
 		this.currentUser = currentUser;
 		this.runService = runService;
 		this.applicationService = applicationService;
 		this.coverLetters = coverLetters;
 		this.screeningAnswers = screeningAnswers;
 		this.streams = streams;
+		this.fillReview = fillReview;
+		this.tailoredResumes = tailoredResumes;
 	}
 
 	/**
@@ -81,6 +94,56 @@ public class ApplicationController {
 	public ScreeningAnswersResponse screeningAnswers(@PathVariable String id,
 			@Valid @RequestBody ScreeningQuestionsRequest request) {
 		return screeningAnswers.answer(currentUser.currentUserId(), id, request.questions());
+	}
+
+	/**
+	 * Opens the job's form in Chrome on this computer and fills it for you; AI answers the
+	 * questions your profile doesn't cover. Nothing is submitted: you check it and press Submit.
+	 */
+	@PostMapping("/{id}/fill-review")
+	public FillReviewResponse fillReview(@PathVariable String id) {
+		return fillReview.fill(currentUser.currentUserId(), id);
+	}
+
+	/**
+	 * Your resume rewritten by AI for this job: same facts, the job's most relevant first, never
+	 * a skill or number your resume doesn't have. Kept, and uploaded when this form is filled.
+	 */
+	@PostMapping("/{id}/tailored-resume")
+	public TailoredResumeResponse tailorResume(@PathVariable String id) {
+		return tailoredResumes.tailor(currentUser.currentUserId(), id);
+	}
+
+	@GetMapping("/{id}/tailored-resume")
+	public TailoredResumeResponse tailoredResume(@PathVariable String id) {
+		return tailoredResumes.get(currentUser.currentUserId(), id);
+	}
+
+	/** The tailored resume as an ATS-friendly PDF. */
+	@GetMapping(path = "/{id}/tailored-resume/pdf", produces = MediaType.APPLICATION_PDF_VALUE)
+	public ResponseEntity<byte[]> tailoredResumePdf(@PathVariable String id) {
+		String userId = currentUser.currentUserId();
+		byte[] pdf = tailoredResumes.pdf(userId, id)
+				.orElseThrow(() -> new NotFoundException("No tailored resume for this application yet."));
+		return ResponseEntity.ok()
+				.header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment()
+						.filename(tailoredResumes.fileName(userId, id)).build().toString())
+				.body(pdf);
+	}
+
+	/**
+	 * "Apply" on a match: tracks it under Applications (waiting for you) and gives the link to
+	 * apply on. Press "I applied" once you have.
+	 */
+	@PostMapping("/from-match/{jobId}/open")
+	public MatchOpenResponse openMatch(@PathVariable @Size(max = 36) String jobId) {
+		return fillReview.openMatch(currentUser.currentUserId(), jobId);
+	}
+
+	/** The same, straight from a match: the application is made (waiting for you) if there isn't one. */
+	@PostMapping("/from-match/{jobId}/fill-review")
+	public MatchFillResponse fillMatch(@PathVariable @Size(max = 36) String jobId) {
+		return fillReview.fillMatch(currentUser.currentUserId(), jobId);
 	}
 
 	/**

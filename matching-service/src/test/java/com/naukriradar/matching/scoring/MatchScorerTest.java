@@ -34,7 +34,10 @@ class MatchScorerTest {
 	void aZeroWeightTurnsAFactorOff() {
 		MatchScorer scorer = scorer(List.of(fixed("a", 1.0), fixed("b", 0.0)), Map.of("a", 1, "b", 0));
 
-		assertThat(scorer.score(MatchContext.of(profile().build(), NOW), job().build()).total()).isEqualTo(100);
+		ScoreResult result = scorer.score(MatchContext.of(profile().build(), NOW), job().build());
+		assertThat(result.total()).isEqualTo(100);
+		// and it isn't listed: a factor that can't move the score would only confuse
+		assertThat(result.breakdown()).extracting(FactorScore::factor).containsExactly("a");
 	}
 
 	@Test

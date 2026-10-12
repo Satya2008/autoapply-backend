@@ -11,5 +11,7 @@ public record ServicesProperties(
 		@DefaultValue("http://localhost:8084") String applyWorkerUrl,
 		@DefaultValue("http://localhost:8082") String jobServiceUrl,
 		@DefaultValue("3s") Duration connectTimeout,
-		@DefaultValue("15s") Duration readTimeout) {
+		@DefaultValue("15s") Duration readTimeout,
+		// AI writes whole documents (a tailored resume) and a busy model is retried: give it time
+		@DefaultValue("150s") Duration aiReadTimeout) {
 }

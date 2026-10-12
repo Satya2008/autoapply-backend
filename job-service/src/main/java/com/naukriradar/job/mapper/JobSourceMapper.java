@@ -21,6 +21,7 @@ public class JobSourceMapper {
 
 		source.setName(request.name().strip());
 		source.setType(request.type());
+		source.setRegion(request.region() == null || request.region().isBlank() ? JobSource.GLOBAL : request.region().strip());
 		source.setBaseUrl(stripTrailingSlash(request.baseUrl().strip()));
 		source.setSearchPath(blankToNull(request.searchPath()));
 		source.setMethod(request.method());
@@ -30,6 +31,7 @@ public class JobSourceMapper {
 		source.setPriority(request.priority());
 		source.setTimeoutSeconds(request.timeoutSeconds());
 		source.setMaxPages(request.maxPages());
+		source.setFetchEveryHours(request.fetchEveryHours());
 
 		source.getHeaders().clear();
 		if (request.headers() != null) {
@@ -52,6 +54,7 @@ public class JobSourceMapper {
 				source.getCode(),
 				source.getName(),
 				source.getType(),
+				source.getRegion(),
 				source.getBaseUrl(),
 				source.getSearchPath(),
 				source.getMethod(),
@@ -64,6 +67,7 @@ public class JobSourceMapper {
 				source.getPriority(),
 				source.getTimeoutSeconds(),
 				source.getMaxPages(),
+				source.getFetchEveryHours(),
 				source.getLastRunAt(),
 				source.getLastRunStatus(),
 				source.getLastRunMessage(),

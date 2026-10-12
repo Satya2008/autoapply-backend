@@ -32,6 +32,7 @@ public final class TestData {
 		private Integer experienceYears = 3;
 		private List<String> excludedCompanies = List.of();
 		private List<String> excludedKeywords = List.of();
+		private MatchingProfile.Filters filters;
 
 		public ProfileBuilder skills(String... skills) {
 			this.skills = List.of(skills);
@@ -73,9 +74,14 @@ public final class TestData {
 			return this;
 		}
 
+		public ProfileBuilder filters(MatchingProfile.Filters filters) {
+			this.filters = filters;
+			return this;
+		}
+
 		public MatchingProfile build() {
 			return new MatchingProfile("user-1", skills, roles, locations, remoteOk, expectedSalary, experienceYears,
-					excludedCompanies, excludedKeywords, 50);
+					excludedCompanies, excludedKeywords, 50, filters);
 		}
 
 	}

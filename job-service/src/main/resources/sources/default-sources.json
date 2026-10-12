@@ -3,6 +3,7 @@
     "code": "arbeitnow",
     "name": "Arbeitnow",
     "type": "REST_JSON",
+    "region": "GLOBAL",
     "baseUrl": "https://www.arbeitnow.com",
     "searchPath": "/api/job-board-api",
     "method": "GET",

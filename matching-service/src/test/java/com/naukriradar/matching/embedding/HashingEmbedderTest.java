@@ -19,6 +19,18 @@ class HashingEmbedderTest {
 	}
 
 	@Test
+	void aLongCompanyDescriptionDoesNotDrownTheRole() {
+		String company = ("We are a fast growing company with offices in many cities. We offer flexible hours, a modern office,"
+				+ " free lunch, a learning budget, health insurance and a friendly culture where people grow together. ").repeat(8);
+		float[] profile = embedder.embed("Roles: Java Backend Developer, Software Engineer\nSkills: java, spring boot, kafka, mysql");
+		float[] javaJob = embedder.embed("Role: Senior Java Developer\nAbout: " + company + "You build services with Spring Boot and Kafka.");
+		float[] otherJob = embedder.embed("Role: Fitness Trainer\nAbout: " + company + "You coach clients in the gym.");
+
+		assertThat(Vectors.cosine(profile, javaJob)).isGreaterThan(0.25);
+		assertThat(Vectors.cosine(profile, otherJob)).isLessThan(0.05);
+	}
+
+	@Test
 	void unrelatedTextsAreFarApartAndATextIsClosestToItself() {
 		float[] java = embedder.embed("Senior Java developer, Spring Boot and Kafka");
 		float[] sales = embedder.embed("Inside sales executive, cold calling, monthly targets");

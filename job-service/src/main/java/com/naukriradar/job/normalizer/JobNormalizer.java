@@ -52,7 +52,7 @@ public class JobNormalizer {
 		if (company == null) {
 			return NormalizationResult.skip(externalId + ": missing company");
 		}
-		String applyUrl = httpUrl(text(raw.get(JobField.APPLY_URL)));
+		String applyUrl = httpUrl(ApplyLinks.best(text(raw.get(JobField.APPLY_URL)), raw.get(JobField.APPLY_OPTIONS)));
 		if (applyUrl == null) {
 			return NormalizationResult.skip(externalId + ": missing or invalid applyUrl");
 		}
@@ -149,7 +149,9 @@ public class JobNormalizer {
 		if (html == null) {
 			return null;
 		}
-		String text = SCRIPT_OR_STYLE.matcher(html).replaceAll(" ");
+		// some boards (Greenhouse) send the HTML itself escaped: "&lt;p&gt;" instead of "<p>"
+		String source = html.indexOf('<') < 0 && html.contains("&lt;") ? HtmlUtils.htmlUnescape(html) : html;
+		String text = SCRIPT_OR_STYLE.matcher(source).replaceAll(" ");
 		text = LIST_ITEM.matcher(text).replaceAll("\n- ");
 		text = BLOCK_TAGS.matcher(text).replaceAll("\n");
 		text = ANY_TAG.matcher(text).replaceAll(" ");

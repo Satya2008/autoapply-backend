@@ -11,6 +11,10 @@ import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 import org.hibernate.validator.constraints.URL;
 
+import com.naukriradar.core.dto.ApplicationDetails;
+import com.naukriradar.core.dto.JobFilters;
+import jakarta.validation.Valid;
+
 /**
  * Full replacement of a profile (PUT). Optional fields left out are cleared; the four
  * settings at the end must always be sent. A list left out is treated as empty.
@@ -33,5 +37,18 @@ public record UpdateProfileRequest(
 		@NotNull Boolean remoteOk,
 		@NotNull @Min(0) @Max(100) Integer minMatchScore,
 		@NotNull @Min(1) @Max(50) Integer dailyApplyLimit,
-		@NotNull Boolean autoApplyEnabled) {
+		@NotNull Boolean autoApplyEnabled,
+		@Valid ApplicationDetails details,
+		@Valid JobFilters filters) {
+
+	/** Without job filters (older clients): the stored ones are kept. */
+	public UpdateProfileRequest(String fullName, String phone, String location, String currentTitle, Integer experienceYears,
+			Long expectedSalary, Integer noticePeriodDays, String linkedinUrl, String githubUrl, String portfolioUrl,
+			Set<String> targetRoles, Set<String> preferredLocations, Set<String> excludedCompanies, Set<String> excludedKeywords,
+			Boolean remoteOk, Integer minMatchScore, Integer dailyApplyLimit, Boolean autoApplyEnabled, ApplicationDetails details) {
+		this(fullName, phone, location, currentTitle, experienceYears, expectedSalary, noticePeriodDays, linkedinUrl, githubUrl,
+				portfolioUrl, targetRoles, preferredLocations, excludedCompanies, excludedKeywords, remoteOk, minMatchScore,
+				dailyApplyLimit, autoApplyEnabled, details, null);
+	}
+
 }

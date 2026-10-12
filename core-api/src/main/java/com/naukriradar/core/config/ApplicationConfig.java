@@ -28,6 +28,16 @@ public class ApplicationConfig {
 		return builder.clone().requestFactory(factory).baseUrl(properties.matchingServiceUrl()).build();
 	}
 
+	/** The same service, for AI calls only: those take far longer than a lookup. */
+	@Bean
+	RestClient matchingAiRestClient(RestClient.Builder builder, ServicesProperties properties) {
+		HttpClient httpClient = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1)
+				.connectTimeout(properties.connectTimeout()).build();
+		JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(httpClient);
+		factory.setReadTimeout(properties.aiReadTimeout());
+		return builder.clone().requestFactory(factory).baseUrl(properties.matchingServiceUrl()).build();
+	}
+
 	/** Bounded: a full pool refuses new runs (503) instead of piling up threads or queue. */
 	@Bean(name = APPLY_RUN_POOL)
 	ThreadPoolTaskExecutor applyRunPool(ApplicationProperties properties) {

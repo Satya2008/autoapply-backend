@@ -2,6 +2,10 @@ server:
   port: 8082
 
 spring:
+  config:
+    # API keys for job sources (${setting:key} in a source reads naukriradar.settings.key);
+    # kept on this machine only, see config/job-sources-secrets.properties.example
+    import: optional:file:./config/job-sources-secrets.properties
   application:
     name: job-service
   data:
@@ -30,14 +34,20 @@ spring:
 
 naukriradar:
   jobs:
+    parsing:
+      # AI reads this many unread jobs every 15 minutes (~770 a day): sized for a free Gemini key
+      batch-size: 8
     allow-private-hosts: false
-    max-response-size: 5MB
+    # big company boards with full descriptions run to ~10MB (Databricks, Elastic)
+    max-response-size: 12MB
     connect-timeout: 5s
     disable-after-failures: 5
     seed-defaults: true
     schedule:
       enabled: true
-      fetch-cron: "0 0 */6 * * *"
+      # 9:00 and 13:00 India time; a source with a small free quota asks for fewer runs (fetchEveryHours)
+      fetch-cron: "0 0 9,13 * * *"
+      zone: Asia/Kolkata
       cleanup-cron: "0 30 3 * * *"
       close-after-days: 7
       delete-after-days: 60

@@ -69,6 +69,44 @@ public class Profile {
 	@Column(length = 255)
 	private String portfolioUrl;
 
+	@Column(length = 100)
+	private String currentCompany;
+
+	/** Yearly, in INR. */
+	private Long currentCtc;
+
+	@Column(length = 100)
+	private String highestDegree;
+
+	@Column(length = 100)
+	private String fieldOfStudy;
+
+	@Column(length = 150)
+	private String college;
+
+	private Integer educationStartYear;
+
+	private Integer graduationYear;
+
+	private Boolean willingToRelocate;
+
+	// the questions most forms add; see ApplicationDetails
+	@Column(length = 50)
+	private String gender;
+
+	@Column(length = 100)
+	private String heardAbout;
+
+	private Boolean authorizedToWork;
+
+	private Boolean needsSponsorship;
+
+	@Column(length = 50)
+	private String disability;
+
+	@Column(length = 50)
+	private String veteranStatus;
+
 	private boolean remoteOk;
 
 	private int minMatchScore = 50;
@@ -96,6 +134,20 @@ public class Profile {
 	@CollectionTable(name = "profile_excluded_keywords", joinColumns = @JoinColumn(name = "user_id"))
 	@Column(name = "keyword", nullable = false, length = 100)
 	private Set<String> excludedKeywords = new HashSet<>();
+
+	/** A job must be about at least one of these (see {@code JobFilters}); empty for no rule. */
+	@ElementCollection
+	@CollectionTable(name = "profile_must_have_keywords", joinColumns = @JoinColumn(name = "user_id"))
+	@Column(name = "keyword", nullable = false, length = 50)
+	private Set<String> mustHaveKeywords = new HashSet<>();
+
+	/** INDIA or ANYWHERE; null is ANYWHERE. */
+	@Column(length = 20)
+	private String jobRegion;
+
+	/** JUNIOR_MID, UP_TO_SENIOR or ANY; null is ANY. */
+	@Column(length = 20)
+	private String jobLevel;
 
 	/** Keyed by normalised skill name, so (user_id, skill) is the table's primary key. */
 	@ElementCollection

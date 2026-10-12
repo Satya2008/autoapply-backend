@@ -76,7 +76,7 @@ class ProfileServiceTest {
 		givenProfileExists();
 		givenSaveReturnsArgument();
 		UpdateProfileRequest blanks = new UpdateProfileRequest("   ", null, " ", null, null, null, null, "", null, null,
-				Set.of(), Set.of(), Set.of(), Set.of(), false, 50, 10, false);
+				Set.of(), Set.of(), Set.of(), Set.of(), false, 50, 10, false, null);
 
 		ProfileResponse response = service.updateProfile(USER_ID, blanks);
 
@@ -219,7 +219,7 @@ class ProfileServiceTest {
 	private static UpdateProfileRequest request(Set<String> targetRoles, Set<String> excludedCompanies,
 			boolean autoApply) {
 		return new UpdateProfileRequest("Satya", null, "Lucknow", "Java Developer", 2, 600_000L, 30,
-				null, null, null, targetRoles, Set.of(), excludedCompanies, Set.of(), true, 60, 10, autoApply);
+				null, null, null, targetRoles, Set.of(), excludedCompanies, Set.of(), true, 60, 10, autoApply, null);
 	}
 
 }

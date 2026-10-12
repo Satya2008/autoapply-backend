@@ -32,9 +32,8 @@ import reactor.core.publisher.Mono;
  * so every gateway instance counts against the same limit.
  *
  * <p>If Redis is slow or down the request goes through: losing rate limiting for a while is
- * better than losing the whole API. Until login exists (Phase 8) the user id is whatever the
- * client sends, so a client can dodge a USER_OR_IP limit by changing it; IP rules can't be
- * dodged that way.
+ * better than losing the whole API. The user id is the one the sign-in check (AuthFilter) set,
+ * so a client can't dodge a USER_OR_IP limit by changing it.
  */
 @Component
 public class RateLimitFilter implements GlobalFilter, Ordered {

@@ -17,7 +17,7 @@ class ProfileFactsAnswererTest {
 
 	private final ProfileResponse profile = new ProfileResponse("u", "Asha Rao", null, "Pune", "Backend Engineer", 4,
 			1_800_000L, 0, "https://linkedin.com/in/asha", null, null, List.of(), List.of(), List.of(), List.of(), true, 50, 10,
-			false, null);
+			false, null, null, null);
 
 	private final List<SkillResponse> skills = List.of(new SkillResponse("java", 3, SkillSource.MANUAL),
 			new SkillResponse("kafka", null, SkillSource.RESUME));

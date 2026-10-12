@@ -19,6 +19,7 @@ import tools.jackson.databind.JsonNode;
 public class ApplyWorkerClient {
 
 	private final RestClient client;
+	private final RestClient reviewClient;
 	private final Resilience resilience;
 
 	public ApplyWorkerClient(RestClient.Builder builder, ServicesProperties properties, Resilience resilience) {
@@ -28,6 +29,31 @@ public class ApplyWorkerClient {
 		factory.setReadTimeout(Duration.ofSeconds(90));
 		this.client = builder.clone().requestFactory(factory).baseUrl(properties.applyWorkerUrl()).build();
 		this.resilience = resilience;
+		// Fill & Review opens Chrome, fills a long form and may wait on AI answers
+		JdkClientHttpRequestFactory slow = new JdkClientHttpRequestFactory(HttpClient.newBuilder()
+				.version(HttpClient.Version.HTTP_1_1).connectTimeout(properties.connectTimeout()).build());
+		slow.setReadTimeout(Duration.ofSeconds(330));
+		this.reviewClient = builder.clone().requestFactory(slow).baseUrl(properties.applyWorkerUrl()).build();
+	}
+
+	/**
+	 * Opens the form in a visible Chrome on the worker's machine, fills it and leaves it for the
+	 * user to submit. Not retried: a retry would open a second window.
+	 */
+	public JsonNode review(String applicationId, String userId, String url, Map<String, String> selectors,
+			Map<String, String> answers) {
+		try {
+			return reviewClient.post()
+					.uri("/internal/v1/review")
+					.contentType(MediaType.APPLICATION_JSON)
+					.body(Map.of("applicationId", applicationId, "userId", userId, "url", url, "selectors", selectors,
+							"answers", answers))
+					.retrieve()
+					.body(JsonNode.class);
+		}
+		catch (RestClientException ex) {
+			throw new UpstreamException("Couldn't open the form in Chrome right now. Is the apply worker running?", ex);
+		}
 	}
 
 	public JsonNode dryRun(String url, Map<String, String> selectors) {

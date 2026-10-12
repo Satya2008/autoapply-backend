@@ -4,6 +4,9 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
+import com.naukriradar.core.dto.ApplicationDetails;
+import com.naukriradar.core.dto.JobFilters;
+
 import com.naukriradar.core.dto.request.UpdateProfileRequest;
 import com.naukriradar.core.dto.response.MatchingProfileResponse;
 import com.naukriradar.core.dto.response.ProfileResponse;
@@ -42,7 +45,12 @@ public class ProfileMapper {
 				profile.getMinMatchScore(),
 				profile.getDailyApplyLimit(),
 				profile.isAutoApplyEnabled(),
-				profile.getUpdatedAt());
+				profile.getUpdatedAt(),
+				new ApplicationDetails(profile.getCurrentCompany(), profile.getCurrentCtc(), profile.getExpectedSalary(),
+						profile.getHighestDegree(), profile.getFieldOfStudy(), profile.getCollege(), profile.getEducationStartYear(),
+						profile.getGraduationYear(), profile.getWillingToRelocate(), profile.getGender(), profile.getHeardAbout(),
+						profile.getAuthorizedToWork(), profile.getNeedsSponsorship(), profile.getDisability(), profile.getVeteranStatus()),
+				filters(profile));
 	}
 
 	public MatchingProfileResponse toMatchingProfile(Profile profile) {
@@ -56,7 +64,14 @@ public class ProfileMapper {
 				profile.getExperienceYears(),
 				sorted(profile.getExcludedCompanies()),
 				sorted(profile.getExcludedKeywords()),
-				profile.getMinMatchScore());
+				profile.getMinMatchScore(),
+				filters(profile));
+	}
+
+	private static JobFilters filters(Profile profile) {
+		return new JobFilters(sorted(profile.getMustHaveKeywords()),
+				profile.getJobRegion() == null ? "ANYWHERE" : profile.getJobRegion(),
+				profile.getJobLevel() == null ? "ANY" : profile.getJobLevel());
 	}
 
 	public List<SkillResponse> toResponse(Map<String, ProfileSkill> skills) {
@@ -82,6 +97,30 @@ public class ProfileMapper {
 		profile.setMinMatchScore(request.minMatchScore());
 		profile.setDailyApplyLimit(request.dailyApplyLimit());
 		profile.setAutoApplyEnabled(request.autoApplyEnabled());
+		// left out entirely (older clients) keeps what is stored; sent, it replaces all of it
+		if (request.details() != null) {
+			ApplicationDetails d = request.details();
+			profile.setCurrentCompany(trimToNull(d.currentCompany()));
+			profile.setCurrentCtc(d.currentCtc());
+			profile.setExpectedSalary(d.expectedCtc() != null ? d.expectedCtc() : request.expectedSalary());
+			profile.setHighestDegree(trimToNull(d.highestDegree()));
+			profile.setFieldOfStudy(trimToNull(d.fieldOfStudy()));
+			profile.setCollege(trimToNull(d.college()));
+			profile.setEducationStartYear(d.educationStartYear());
+			profile.setGraduationYear(d.graduationYear());
+			profile.setWillingToRelocate(d.willingToRelocate());
+			profile.setGender(trimToNull(d.gender()));
+			profile.setHeardAbout(trimToNull(d.heardAbout()));
+			profile.setAuthorizedToWork(d.authorizedToWork());
+			profile.setNeedsSponsorship(d.needsSponsorship());
+			profile.setDisability(trimToNull(d.disability()));
+			profile.setVeteranStatus(trimToNull(d.veteranStatus()));
+		}
+		// the same for job filters; the must-have words are set by the service, with the other lists
+		if (request.filters() != null) {
+			profile.setJobRegion(request.filters().region());
+			profile.setJobLevel(request.filters().level());
+		}
 	}
 
 	private static String trimToNull(String value) {

@@ -9,6 +9,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Stream;
 
 import com.naukriradar.common.crypto.CryptoService;
 import com.naukriradar.common.exception.BadRequestException;
@@ -174,7 +175,10 @@ public class AiProviderService {
 	public List<Target> targets(boolean strong) {
 		return repository.findAllByOrderByPriorityAscNameAsc().stream()
 				.filter(AiProvider::isReady)
-				.map(p -> target(p, strong))
+				// a busy strong model (free tiers often are) falls back to the same provider's everyday one
+				.flatMap(p -> strong && p.getStrongModel() != null && !p.getStrongModel().equals(p.getModel())
+						? Stream.of(target(p, true), target(p, false))
+						: Stream.of(target(p, strong)))
 				.flatMap(Optional::stream)
 				.toList();
 	}

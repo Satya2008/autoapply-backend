@@ -30,6 +30,9 @@ class GatewayRoutingTests {
 
 	private static final HttpServer notificationService = startFakeService("notification-service");
 
+	/** The admin the fake core-api knows ("Bearer admin-token"). */
+	static final String ADMIN = "99999999-9999-9999-9999-999999999999";
+
 	private final HttpClient client = HttpClient.newHttpClient();
 
 	@LocalServerPort
@@ -56,7 +59,7 @@ class GatewayRoutingTests {
 	@Test
 	void profileRequestReachesCoreApiWithTheUserHeader() throws Exception {
 		HttpResponse<String> response = send(HttpRequest.newBuilder(uri("/api/v1/me/profile"))
-				.header("X-User-Id", "11111111-1111-1111-1111-111111111111"));
+				.header("Authorization", "Bearer user-11111111-1111-1111-1111-111111111111"));
 
 		assertThat(response.statusCode()).isEqualTo(200);
 		assertThat(response.body()).isEqualTo("core-api saw GET /api/v1/me/profile as 11111111-1111-1111-1111-111111111111");
@@ -76,8 +79,8 @@ class GatewayRoutingTests {
 				.POST(HttpRequest.BodyPublishers.noBody()));
 		HttpResponse<String> docs = send(HttpRequest.newBuilder(uri("/docs/job-service")));
 
-		assertThat(list.body()).isEqualTo("job-service saw GET /api/v1/admin/job-sources as null");
-		assertThat(fetch.body()).isEqualTo("job-service saw POST /api/v1/admin/job-sources/abc/fetch as null");
+		assertThat(list.body()).isEqualTo("job-service saw GET /api/v1/admin/job-sources as " + ADMIN);
+		assertThat(fetch.body()).isEqualTo("job-service saw POST /api/v1/admin/job-sources/abc/fetch as " + ADMIN);
 		assertThat(docs.body()).isEqualTo("job-service saw GET /v3/api-docs as null");
 	}
 
@@ -88,18 +91,18 @@ class GatewayRoutingTests {
 		HttpResponse<String> runs = send(HttpRequest.newBuilder(uri("/api/v1/admin/jobs/fetch-runs"))
 				.POST(HttpRequest.BodyPublishers.noBody()));
 
-		assertThat(search.body()).isEqualTo("job-service saw GET /api/v1/jobs as null");
-		assertThat(detail.body()).isEqualTo("job-service saw GET /api/v1/jobs/abc as null");
-		assertThat(runs.body()).isEqualTo("job-service saw POST /api/v1/admin/jobs/fetch-runs as null");
+		assertThat(search.body()).isEqualTo("job-service saw GET /api/v1/jobs as " + ADMIN);
+		assertThat(detail.body()).isEqualTo("job-service saw GET /api/v1/jobs/abc as " + ADMIN);
+		assertThat(runs.body()).isEqualTo("job-service saw POST /api/v1/admin/jobs/fetch-runs as " + ADMIN);
 	}
 
 	@Test
 	void matchesGoToMatchingServiceEvenThoughTheyAreUnderMe() throws Exception {
 		String user = "22222222-2222-2222-2222-222222222222";
-		HttpResponse<String> list = send(HttpRequest.newBuilder(uri("/api/v1/me/matches")).header("X-User-Id", user));
-		HttpResponse<String> run = send(HttpRequest.newBuilder(uri("/api/v1/me/matches/runs")).header("X-User-Id", user)
+		HttpResponse<String> list = send(HttpRequest.newBuilder(uri("/api/v1/me/matches")).header("Authorization", "Bearer user-" + user));
+		HttpResponse<String> run = send(HttpRequest.newBuilder(uri("/api/v1/me/matches/runs")).header("Authorization", "Bearer user-" + user)
 				.POST(HttpRequest.BodyPublishers.noBody()));
-		HttpResponse<String> profile = send(HttpRequest.newBuilder(uri("/api/v1/me/profile")).header("X-User-Id", user));
+		HttpResponse<String> profile = send(HttpRequest.newBuilder(uri("/api/v1/me/profile")).header("Authorization", "Bearer user-" + user));
 		HttpResponse<String> docs = send(HttpRequest.newBuilder(uri("/docs/matching-service")));
 
 		assertThat(list.body()).isEqualTo("matching-service saw GET /api/v1/me/matches as " + user);
@@ -111,26 +114,26 @@ class GatewayRoutingTests {
 	@Test
 	void skillGapAndEvalsGoToMatchingAndScreeningAnswersToCoreApi() throws Exception {
 		String user = "44444444-4444-4444-4444-444444444444";
-		HttpResponse<String> gap = send(HttpRequest.newBuilder(uri("/api/v1/me/skill-gap")).header("X-User-Id", user));
+		HttpResponse<String> gap = send(HttpRequest.newBuilder(uri("/api/v1/me/skill-gap")).header("Authorization", "Bearer user-" + user));
 		HttpResponse<String> eval = send(HttpRequest.newBuilder(uri("/api/v1/admin/evals/runs"))
 				.POST(HttpRequest.BodyPublishers.ofString("{}")));
 		HttpResponse<String> answers = send(HttpRequest.newBuilder(uri("/api/v1/me/applications/a1/screening-answers"))
-				.header("X-User-Id", user).POST(HttpRequest.BodyPublishers.ofString("{}")));
+				.header("Authorization", "Bearer user-" + user).POST(HttpRequest.BodyPublishers.ofString("{}")));
 
 		assertThat(gap.body()).isEqualTo("matching-service saw GET /api/v1/me/skill-gap as " + user);
-		assertThat(eval.body()).isEqualTo("matching-service saw POST /api/v1/admin/evals/runs as null");
+		assertThat(eval.body()).isEqualTo("matching-service saw POST /api/v1/admin/evals/runs as " + ADMIN);
 		assertThat(answers.body()).isEqualTo("core-api saw POST /api/v1/me/applications/a1/screening-answers as " + user);
 	}
 
 	@Test
 	void applicationsAndPortalsGoToCoreApi() throws Exception {
 		String user = "33333333-3333-3333-3333-333333333333";
-		HttpResponse<String> runs = send(HttpRequest.newBuilder(uri("/api/v1/me/applications/runs")).header("X-User-Id", user)
+		HttpResponse<String> runs = send(HttpRequest.newBuilder(uri("/api/v1/me/applications/runs")).header("Authorization", "Bearer user-" + user)
 				.POST(HttpRequest.BodyPublishers.noBody()));
 		HttpResponse<String> portals = send(HttpRequest.newBuilder(uri("/api/v1/admin/portals")));
 
 		assertThat(runs.body()).isEqualTo("core-api saw POST /api/v1/me/applications/runs as " + user);
-		assertThat(portals.body()).isEqualTo("core-api saw GET /api/v1/admin/portals as null");
+		assertThat(portals.body()).isEqualTo("core-api saw GET /api/v1/admin/portals as " + ADMIN);
 	}
 
 	@Test
@@ -141,9 +144,9 @@ class GatewayRoutingTests {
 		HttpResponse<String> job = send(HttpRequest.newBuilder(uri("/api/v1/admin/scheduler/auto-apply/run"))
 				.POST(HttpRequest.BodyPublishers.noBody()));
 
-		assertThat(setting.body()).isEqualTo("core-api saw PUT /api/v1/admin/settings/applications.max-attempts as null");
-		assertThat(audit.body()).isEqualTo("core-api saw GET /api/v1/admin/audit as null");
-		assertThat(job.body()).isEqualTo("core-api saw POST /api/v1/admin/scheduler/auto-apply/run as null");
+		assertThat(setting.body()).isEqualTo("core-api saw PUT /api/v1/admin/settings/applications.max-attempts as " + ADMIN);
+		assertThat(audit.body()).isEqualTo("core-api saw GET /api/v1/admin/audit as " + ADMIN);
+		assertThat(job.body()).isEqualTo("core-api saw POST /api/v1/admin/scheduler/auto-apply/run as " + ADMIN);
 	}
 
 	@Test
@@ -153,9 +156,9 @@ class GatewayRoutingTests {
 				.DELETE());
 		HttpResponse<String> core = send(HttpRequest.newBuilder(uri("/api/v1/admin/cache/core-api")));
 
-		assertThat(jobs.body()).isEqualTo("job-service saw GET /api/v1/admin/cache as null");
-		assertThat(clear.body()).isEqualTo("matching-service saw DELETE /api/v1/admin/cache/match-pages as null");
-		assertThat(core.body()).isEqualTo("core-api saw GET /api/v1/admin/cache as null");
+		assertThat(jobs.body()).isEqualTo("job-service saw GET /api/v1/admin/cache as " + ADMIN);
+		assertThat(clear.body()).isEqualTo("matching-service saw DELETE /api/v1/admin/cache/match-pages as " + ADMIN);
+		assertThat(core.body()).isEqualTo("core-api saw GET /api/v1/admin/cache as " + ADMIN);
 		assertThat(send(HttpRequest.newBuilder(uri("/api/v1/admin/cache"))).statusCode()).isEqualTo(404);
 		assertThat(send(HttpRequest.newBuilder(uri("/api/v1/admin/cache/nope"))).statusCode()).isEqualTo(404);
 	}
@@ -168,10 +171,10 @@ class GatewayRoutingTests {
 		HttpResponse<String> jobs = send(HttpRequest.newBuilder(uri("/api/v1/admin/resilience/job-service")));
 		HttpResponse<String> core = send(HttpRequest.newBuilder(uri("/api/v1/admin/resilience/core-api")));
 
-		assertThat(prompts.body()).isEqualTo("matching-service saw POST /api/v1/admin/prompts/job-fit/versions as null");
-		assertThat(usage.body()).isEqualTo("matching-service saw GET /api/v1/admin/ai/usage as null");
-		assertThat(jobs.body()).isEqualTo("job-service saw GET /api/v1/admin/resilience as null");
-		assertThat(core.body()).isEqualTo("core-api saw GET /api/v1/admin/resilience as null");
+		assertThat(prompts.body()).isEqualTo("matching-service saw POST /api/v1/admin/prompts/job-fit/versions as " + ADMIN);
+		assertThat(usage.body()).isEqualTo("matching-service saw GET /api/v1/admin/ai/usage as " + ADMIN);
+		assertThat(jobs.body()).isEqualTo("job-service saw GET /api/v1/admin/resilience as " + ADMIN);
+		assertThat(core.body()).isEqualTo("core-api saw GET /api/v1/admin/resilience as " + ADMIN);
 	}
 
 	@Test
@@ -181,9 +184,9 @@ class GatewayRoutingTests {
 				.POST(HttpRequest.BodyPublishers.noBody()));
 		HttpResponse<String> outbox = send(HttpRequest.newBuilder(uri("/api/v1/admin/events/matching-service/outbox")));
 
-		assertThat(dlq.body()).isEqualTo("job-service saw GET /api/v1/admin/events/dlq as null");
-		assertThat(replay.body()).isEqualTo("core-api saw POST /api/v1/admin/events/dlq/abc/replay as null");
-		assertThat(outbox.body()).isEqualTo("matching-service saw GET /api/v1/admin/events/outbox as null");
+		assertThat(dlq.body()).isEqualTo("job-service saw GET /api/v1/admin/events/dlq as " + ADMIN);
+		assertThat(replay.body()).isEqualTo("core-api saw POST /api/v1/admin/events/dlq/abc/replay as " + ADMIN);
+		assertThat(outbox.body()).isEqualTo("matching-service saw GET /api/v1/admin/events/outbox as " + ADMIN);
 	}
 
 	@Test
@@ -194,7 +197,7 @@ class GatewayRoutingTests {
 				.POST(HttpRequest.BodyPublishers.ofString("{}")));
 		HttpResponse<String> prefs = send(HttpRequest.newBuilder(uri("/api/v1/me/notification-preferences")));
 
-		assertThat(test.body()).isEqualTo("notification-service saw POST /api/v1/admin/notifications/test as null");
+		assertThat(test.body()).isEqualTo("notification-service saw POST /api/v1/admin/notifications/test as " + ADMIN);
 		assertThat(webhook.body()).isEqualTo("notification-service saw POST /api/v1/telegram/webhook as null");
 		assertThat(prefs.body()).startsWith("core-api saw GET /api/v1/me/notification-preferences");
 	}
@@ -208,6 +211,45 @@ class GatewayRoutingTests {
 	}
 
 	@Test
+	void withoutASessionTheApiIsClosedExceptSignInAndSignUp() throws Exception {
+		assertThat(sendAnonymous(HttpRequest.newBuilder(uri("/api/v1/me/profile"))).statusCode()).isEqualTo(401);
+		assertThat(sendAnonymous(HttpRequest.newBuilder(uri("/api/v1/me/profile"))
+				.header("Authorization", "Bearer not-a-session")).statusCode()).isEqualTo(401);
+		assertThat(sendAnonymous(HttpRequest.newBuilder(uri("/api/v1/auth/login"))
+				.POST(HttpRequest.BodyPublishers.ofString("{}"))).body()).isEqualTo("core-api saw POST /api/v1/auth/login as null");
+		assertThat(sendAnonymous(HttpRequest.newBuilder(uri("/api/v1/auth/register"))
+				.POST(HttpRequest.BodyPublishers.ofString("{}"))).statusCode()).isEqualTo(200);
+	}
+
+	@Test
+	void aUserIdSentByTheClientIsNeverTrusted() throws Exception {
+		String me = "55555555-5555-5555-5555-555555555555";
+		// no session: posing as someone else gets nothing
+		assertThat(sendAnonymous(HttpRequest.newBuilder(uri("/api/v1/me/profile"))
+				.header("X-User-Id", "66666666-6666-6666-6666-666666666666")).statusCode()).isEqualTo(401);
+		// with a session: the header is replaced by the session's user
+		HttpResponse<String> response = send(HttpRequest.newBuilder(uri("/api/v1/me/profile"))
+				.header("Authorization", "Bearer user-" + me).header("X-User-Id", "66666666-6666-6666-6666-666666666666")
+				.header("X-User-Role", "ADMIN"));
+		assertThat(response.body()).isEqualTo("core-api saw GET /api/v1/me/profile as " + me);
+	}
+
+	@Test
+	void theAdminConsoleIsForAdminsOnly() throws Exception {
+		HttpResponse<String> asUser = send(HttpRequest.newBuilder(uri("/api/v1/admin/users"))
+				.header("Authorization", "Bearer user-77777777-7777-7777-7777-777777777777"));
+		HttpResponse<String> asAdmin = send(HttpRequest.newBuilder(uri("/api/v1/admin/users")));
+
+		assertThat(asUser.statusCode()).isEqualTo(403);
+		assertThat(asAdmin.body()).isEqualTo("core-api saw GET /api/v1/admin/users as " + ADMIN);
+	}
+
+	@Test
+	void testHelpersAreNotPublic() throws Exception {
+		assertThat(send(HttpRequest.newBuilder(uri("/api/v1/dev/users?email=a@b.c"))).statusCode()).isEqualTo(404);
+	}
+
+	@Test
 	void unknownPathsAreNotForwarded() throws Exception {
 		HttpResponse<String> response = send(HttpRequest.newBuilder(uri("/api/v1/unknown")));
 
@@ -218,16 +260,41 @@ class GatewayRoutingTests {
 		return URI.create("http://localhost:" + port + path);
 	}
 
+	/** Signed in as the admin unless the request says otherwise. */
 	private HttpResponse<String> send(HttpRequest.Builder request) throws Exception {
+		HttpRequest built = request.build();
+		if (built.headers().firstValue("Authorization").isEmpty()) {
+			built = request.header("Authorization", "Bearer admin-token").build();
+		}
+		return client.send(built, HttpResponse.BodyHandlers.ofString());
+	}
+
+	private HttpResponse<String> sendAnonymous(HttpRequest.Builder request) throws Exception {
 		return client.send(request.build(), HttpResponse.BodyHandlers.ofString());
 	}
 
-	/** Echoes back its name, the method, path and user header it received. */
+	/** Echoes back its name, the method, path and user header it received. core-api also resolves sessions. */
 	private static HttpServer startFakeService(String name) {
 		try {
 			HttpServer server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
 			server.createContext("/", exchange -> {
-				String body = name + " saw " + exchange.getRequestMethod() + " " + exchange.getRequestURI().getPath()
+				String path = exchange.getRequestURI().getPath();
+				if (path.equals("/internal/v1/sessions/resolve")) {
+					// "admin-token" is the admin; "user-<id>" is that user; anything else isn't a session
+					String token = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8)
+							.replaceAll("(?s).*\"token\"\\s*:\\s*\"([^\"]*)\".*", "$1");
+					String json = token.equals("admin-token") ? "{\"userId\": \"" + ADMIN + "\", \"role\": \"ADMIN\"}"
+							: token.startsWith("user-") ? "{\"userId\": \"" + token.substring(5) + "\", \"role\": \"USER\"}" : null;
+					byte[] bytes = json == null ? new byte[0] : json.getBytes(StandardCharsets.UTF_8);
+					exchange.getResponseHeaders().set("Content-Type", "application/json");
+					exchange.sendResponseHeaders(json == null ? 404 : 200, json == null ? -1 : bytes.length);
+					if (json != null) {
+						exchange.getResponseBody().write(bytes);
+					}
+					exchange.close();
+					return;
+				}
+				String body = name + " saw " + exchange.getRequestMethod() + " " + path
 						+ " as " + exchange.getRequestHeaders().getFirst("X-User-Id");
 				byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
 				exchange.sendResponseHeaders(200, bytes.length);

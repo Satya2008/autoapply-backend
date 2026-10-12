@@ -34,7 +34,6 @@ import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
-import org.springframework.web.util.UriComponentsBuilder;
 
 /**
  * Handles any board that is "an HTTP call returning JSON". Everything board-specific (URL,
@@ -88,16 +87,7 @@ public class GenericRestJobProvider implements JobSourceProvider {
 	}
 
 	URI buildUri(JobSource source, FetchRequest request) {
-		Map<String, Object> variables = Map.of("query", request.query(), "page", request.page());
-		try {
-			UriComponentsBuilder builder = UriComponentsBuilder.fromUriString(source.getBaseUrl() + nullToEmpty(source.getSearchPath()));
-			source.getQueryParams().forEach(builder::queryParam);
-			// encode the template first, then expand: values like "c++ & go" are encoded strictly
-			return builder.encode().buildAndExpand(variables).toUri();
-		}
-		catch (IllegalArgumentException ex) {
-			throw new JobSourceFetchException("Could not build the request URL: " + ex.getMessage(), ex);
-		}
+		return SourceUris.build(source, request, placeholders);
 	}
 
 	private String call(JobSource source, URI uri, FetchRequest request) {
@@ -184,8 +174,8 @@ public class GenericRestJobProvider implements JobSourceProvider {
 			}
 			DocumentContext itemContext = JsonPath.using(LENIENT).parse(item);
 			Map<JobField, Object> values = new EnumMap<>(JobField.class);
-			source.getFieldMappings().forEach((key, path) ->
-					JobField.fromKey(key).ifPresent(field -> values.put(field, itemContext.read(path))));
+			source.getFieldMappings().forEach((key, path) -> JobField.fromKey(key).ifPresent(field ->
+					values.put(field, FieldMappings.isLiteral(path) ? FieldMappings.literal(path) : itemContext.read(path))));
 			jobs.add(new RawJob(values));
 		}
 		return jobs;
@@ -225,10 +215,6 @@ public class GenericRestJobProvider implements JobSourceProvider {
 			cause = cause.getCause();
 		}
 		return cause;
-	}
-
-	private static String nullToEmpty(String value) {
-		return value == null ? "" : value;
 	}
 
 }

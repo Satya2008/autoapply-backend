@@ -24,10 +24,12 @@ public class MatchingClient {
 	private static final int MAX_QUERY = 4000;
 
 	private final RestClient matchingRestClient;
+	private final RestClient aiRestClient;
 	private final Resilience resilience;
 
-	public MatchingClient(RestClient matchingRestClient, Resilience resilience) {
+	public MatchingClient(RestClient matchingRestClient, RestClient matchingAiRestClient, Resilience resilience) {
 		this.matchingRestClient = matchingRestClient;
+		this.aiRestClient = matchingAiRestClient;
 		this.resilience = resilience;
 	}
 
@@ -44,7 +46,8 @@ public class MatchingClient {
 		body.put("userId", userId);
 		body.put("fresh", fresh);
 		try {
-			JsonNode reply = resilience.call("matching-service", () -> matchingRestClient.post()
+			// its own breaker: slow AI never trips the one that guards match lookups
+			JsonNode reply = resilience.call("matching-ai", () -> aiRestClient.post()
 					.uri("/internal/v1/ai/run")
 					.contentType(MediaType.APPLICATION_JSON)
 					.body(body)

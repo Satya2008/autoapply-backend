@@ -25,4 +25,11 @@ public record JobDetailResponse(
 		Instant lastSeenAt,
 		JsonNode requirements,
 		Instant parsedAt) {
+
+	/** For users: where a job came from is the app's business, not theirs. */
+	public JobDetailResponse withoutSource() {
+		return new JobDetailResponse(id, null, null, title, company, location, remote, salaryMin, salaryMax, currency, postedAt,
+				applyUrl, description, status, fetchedAt, lastSeenAt, requirements, parsedAt);
+	}
+
 }

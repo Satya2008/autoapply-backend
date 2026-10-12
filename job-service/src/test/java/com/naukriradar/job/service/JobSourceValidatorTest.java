@@ -24,6 +24,34 @@ class JobSourceValidatorTest {
 	}
 
 	@Test
+	void fixedValuesAreAcceptedInPlaceOfAPath() {
+		assertThatCode(() -> validator.validate(request(b -> b.mappings.put("company", "=Acme"))))
+				.doesNotThrowAnyException();
+		assertThatThrownBy(() -> validator.validate(request(b -> b.mappings.put("company", "="))))
+				.isInstanceOf(InvalidSourceConfigException.class)
+				.hasMessageContaining("fixed value");
+	}
+
+	@Test
+	void scrapedSourcesUseCssSelectors() {
+		assertThatCode(() -> validator.validate(request(b -> {
+			b.type = SourceType.HTML_SCRAPE;
+			b.resultsPath = "ul.jobs > li";
+			b.mappings = new HashMap<>(Map.of("externalId", "a@href", "title", "h3", "company", "=Acme",
+					"applyUrl", "a.apply@href", "description", ".about@html"));
+		}))).doesNotThrowAnyException();
+
+		assertThatThrownBy(() -> validator.validate(request(b -> {
+			b.type = SourceType.HTML_SCRAPE;
+			b.resultsPath = "ul.jobs >> [";
+			b.method = RequestMethod.POST;
+		})))
+				.isInstanceOf(InvalidSourceConfigException.class)
+				.hasMessageContaining("CSS selector")
+				.hasMessageContaining("GET");
+	}
+
+	@Test
 	void reportsEveryProblemAtOnce() {
 		assertThatThrownBy(() -> validator.validate(request(b -> {
 			b.baseUrl = "ftp://boards.example.com";
@@ -91,11 +119,13 @@ class JobSourceValidatorTest {
 	private static JobSourceRequest request(Consumer<Builder> changes) {
 		Builder b = new Builder();
 		changes.accept(b);
-		return new JobSourceRequest("board", "Board", SourceType.REST_JSON, b.baseUrl, b.searchPath, b.method, b.body,
-				b.headers, Map.of("page", "{page}"), b.resultsPath, b.mappings, true, 1, 10, 1);
+		return new JobSourceRequest("board", "Board", b.type, "IN", b.baseUrl, b.searchPath, b.method, b.body,
+				b.headers, Map.of("page", "{page}"), b.resultsPath, b.mappings, true, 1, 10, 1, null);
 	}
 
 	private static final class Builder {
+
+		SourceType type = SourceType.REST_JSON;
 
 		String baseUrl = "https://boards.example.com";
 

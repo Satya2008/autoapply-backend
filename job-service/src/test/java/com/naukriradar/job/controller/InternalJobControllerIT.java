@@ -23,6 +23,7 @@ import org.springframework.test.web.servlet.ResultActions;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.contains;
+import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.lessThanOrEqualTo;
 import static org.hamcrest.Matchers.startsWith;
@@ -78,6 +79,21 @@ class InternalJobControllerIT {
 	void symbolsAndShortWordsInKeywordsAreHarmless() throws Exception {
 		candidates("{\"keywords\": [\"c#\", \"go\", \"+" + token + "*\", \"\\\"drop\\\"\"], \"postedWithinDays\": 30}")
 				.andExpect(jsonPath("$[*].title", contains(token + " Engineer", "Backend Engineer")));
+	}
+
+	@Test
+	void theCandidatesRulesNarrowTheShortlist() throws Exception {
+		save(new NormalizedJob("berlin", token + " Kotlin Engineer", token + " kotlin", "Berlin", false, null, null, null, NOW,
+				"https://jobs.example.com/berlin", token + " kotlin"));
+		save(new NormalizedJob("remote", token + " Kotlin Remote", token + " kotlin", "Anywhere", true, null, null, null, NOW,
+				"https://jobs.example.com/remote", token + " kotlin"));
+
+		// must mention "kotlin": the two jobs above, not the ones from setUp
+		candidates("{\"keywords\": [\"" + token + "\"], \"required\": [\"kotlin\"]}")
+				.andExpect(jsonPath("$[*].title", containsInAnyOrder(token + " Kotlin Engineer", token + " Kotlin Remote")));
+		// and in India or remote: Berlin goes
+		candidates("{\"keywords\": [\"" + token + "\"], \"required\": [\"kotlin\"], \"indiaOrRemote\": true}")
+				.andExpect(jsonPath("$[*].title", contains(token + " Kotlin Remote")));
 	}
 
 	@Test

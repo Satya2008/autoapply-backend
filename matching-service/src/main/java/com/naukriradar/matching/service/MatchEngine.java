@@ -70,8 +70,9 @@ public class MatchEngine {
 		}
 		Set<String> keywords = new LinkedHashSet<>(profile.skills());
 		keywords.addAll(profile.targetRoles());
-		List<CandidateJob> keywordCandidates = jobService.candidates(List.copyOf(keywords), properties.candidateDays(),
-				properties.candidateLimit());
+		// the job filters narrow the shortlist itself, so the few hundred scored are ones that can be shown
+		List<CandidateJob> keywordCandidates = jobService.candidates(List.copyOf(keywords), profile.filters().mustHave(),
+				"INDIA".equals(profile.filters().region()), properties.candidateDays(), properties.candidateLimit());
 		Shortlist shortlist = semanticShortlist(profile, keywordCandidates);
 		List<CandidateJob> candidates = shortlist.jobs();
 
@@ -103,6 +104,10 @@ public class MatchEngine {
 
 		JobMatchWriter.Counts counts = writer.upsert(userId, keep, now);
 		writer.deleteFor(userId, drop);
+		if (!seen.isEmpty()) {
+			// matches from earlier runs that this one didn't keep (filters changed, job left the shortlist)
+			writer.deleteAllExcept(userId, keep.stream().map(k -> k.job().id()).toList());
+		}
 		AiReRanker.Outcome ai = reRanker.rerank(profile, keep);
 		return new Outcome(seen.size(), excluded, counts.created(), counts.updated(), drop.size() - excluded, ai.scored(),
 				ai.note());

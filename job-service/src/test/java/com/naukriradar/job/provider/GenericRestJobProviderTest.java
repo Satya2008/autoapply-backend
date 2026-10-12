@@ -94,6 +94,42 @@ class GenericRestJobProviderTest {
 	}
 
 	@Test
+	void settingPlaceholdersInQueryParamsAreResolvedAndPageWorksInThePath() {
+		JobSource source = arbeitnow();
+		source.setSearchPath("/v1/jobs/in/search/{page}");
+		source.getQueryParams().clear();
+		source.getQueryParams().put("app_key", "${setting:board-key}");
+
+		URI uri = provider(true).buildUri(source, new FetchRequest("", 3));
+
+		assertThat(uri.getRawPath()).endsWith("/v1/jobs/in/search/3");
+		assertThat(uri.getRawQuery()).isEqualTo("app_key=secret-123");
+	}
+
+	@Test
+	void aSettingPlaceholderInThePathIsResolvedAndEncoded() {
+		JobSource source = arbeitnow();
+		source.setSearchPath("/api/${setting:board-key}");
+		source.getQueryParams().clear();
+
+		URI uri = provider(true).buildUri(source, new FetchRequest("", 1));
+
+		assertThat(uri.getRawPath()).endsWith("/api/secret-123");
+	}
+
+	@Test
+	void aFixedValueFillsAFieldTheBoardLeavesOut() {
+		board.stubFor(get(urlPathEqualTo("/api/job-board-api"))
+				.willReturn(okJson("{\"data\": [{\"slug\": \"a\", \"title\": \"T\"}]}")));
+		JobSource source = arbeitnow();
+		source.getFieldMappings().put("company", "=Acme");
+
+		RawJob job = provider(true).fetchPage(source, new FetchRequest("", 1)).get(0);
+
+		assertThat(job.get(JobField.COMPANY)).isEqualTo("Acme");
+	}
+
+	@Test
 	void settingPlaceholdersInHeadersAreResolved() {
 		board.stubFor(get(urlPathEqualTo("/api/job-board-api")).willReturn(okJson("{\"data\": []}")));
 		JobSource source = arbeitnow();

@@ -5,6 +5,7 @@ import java.net.URISyntaxException;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 
 import com.naukriradar.core.model.PortalConfig;
@@ -74,6 +75,12 @@ public class RiskClassifier {
 		return lower.startsWith("www.") ? lower.substring(4) : lower;
 	}
 
+	/** What each band means for the user, in words that name no site. */
+	static final Map<RiskBand, String> BY_BAND = Map.of(
+			RiskBand.LOW, "We know this site's application form, so it can be sent for you.",
+			RiskBand.MEDIUM, "A site we don't know yet: we fill what we can and you send it.",
+			RiskBand.HIGH, "This site doesn't allow automated applications, so you apply there yourself.");
+
 	public record Rules(List<String> highRisk, List<String> lowRisk) {
 
 		public Risk classify(String applyUrl, List<PortalConfig> portals) {
@@ -86,20 +93,20 @@ public class RiskClassifier {
 					.filter(p -> covers(p.getDomain(), host))
 					.max(Comparator.comparingInt(p -> p.getDomain().length()));
 			if (portal.isPresent()) {
-				return new Risk(portal.get().getRiskBand(), portal.get().getName() + " is set to "
-						+ portal.get().getRiskBand() + " risk by an admin.");
+				// users are told what it means, never which site it is (the sources stay ours)
+				return new Risk(portal.get().getRiskBand(), BY_BAND.get(portal.get().getRiskBand()));
 			}
 			for (String domain : highRisk) {
 				if (covers(domain, host)) {
-					return new Risk(RiskBand.HIGH, domain + " doesn't allow automated applications.");
+					return new Risk(RiskBand.HIGH, BY_BAND.get(RiskBand.HIGH));
 				}
 			}
 			for (String domain : lowRisk) {
 				if (covers(domain, host)) {
-					return new Risk(RiskBand.LOW, domain + " is an applicant tracking system that accepts direct applications.");
+					return new Risk(RiskBand.LOW, BY_BAND.get(RiskBand.LOW));
 				}
 			}
-			return new Risk(RiskBand.MEDIUM, host + " isn't a known site, so it won't be automated.");
+			return new Risk(RiskBand.MEDIUM, BY_BAND.get(RiskBand.MEDIUM));
 		}
 
 	}

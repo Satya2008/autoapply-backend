@@ -58,13 +58,15 @@ class RiskClassifierTest {
 
 		assertThat(classifier.classify("https://careers.acme.com/1", List.of(acme, careers)).band()).isEqualTo(RiskBand.LOW);
 		assertThat(classifier.classify("https://shop.acme.com/1", List.of(acme, careers)).band()).isEqualTo(RiskBand.HIGH);
-		assertThat(classifier.classify("https://www.linkedin.com/jobs/1", List.of(linkedin)).reason()).contains("by an admin");
+		// an admin's override wins, and the reason still names no site
+		assertThat(classifier.classify("https://www.linkedin.com/jobs/1", List.of(linkedin)).reason())
+				.startsWith("We know this site").doesNotContain("linkedin");
 	}
 
 	@Test
 	void reasonsExplainTheDecision() {
 		assertThat(classifier.classify("https://www.linkedin.com/jobs/1", List.of()).reason())
-				.isEqualTo("linkedin.com doesn't allow automated applications.");
+				.isEqualTo("This site doesn't allow automated applications, so you apply there yourself.");
 	}
 
 	private static PortalConfig portal(String domain, RiskBand risk) {

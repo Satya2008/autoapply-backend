@@ -40,7 +40,8 @@ naukriradar:
       skills: 35
       title: 25
       location: 15
-      salary: 10
+      # no one writes an expected salary on a resume and most postings give none: off
+      salary: 0
       experience: 10
       recency: 5
       # closeness in meaning (embeddings); "can't tell" when semantic matching is off
@@ -64,7 +65,7 @@ naukriradar:
     nightly-zone: Asia/Kolkata
     # cosine range mapped onto the 0-1 semantic score, per embedding model (tune with the matcher eval)
     calibration:
-      "[local:hashing-v1]": { floor: 0.25, ceiling: 0.65 }
+      "[local:hashing-v2]": { floor: 0.05, ceiling: 0.35 }
       "[openai:text-embedding-3-small]": { floor: 0.20, ceiling: 0.55 }
       "[gemini:text-embedding-004]": { floor: 0.40, ceiling: 0.75 }
       "[ollama:nomic-embed-text]": { floor: 0.40, ceiling: 0.75 }

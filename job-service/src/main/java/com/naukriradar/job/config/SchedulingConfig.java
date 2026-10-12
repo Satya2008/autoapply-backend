@@ -37,7 +37,7 @@ public class SchedulingConfig {
 	private final JobParsingService parsing;
 
 	/** Only starts the run; the run itself is guarded by the orchestrator's own lock. */
-	@Scheduled(cron = "${naukriradar.jobs.schedule.fetch-cron:0 0 */6 * * *}")
+	@Scheduled(cron = "${naukriradar.jobs.schedule.fetch-cron:0 0 9,13 * * *}", zone = "${naukriradar.jobs.schedule.zone:Asia/Kolkata}")
 	@SchedulerLock(name = "fetch-all-sources", lockAtLeastFor = "PT1M", lockAtMostFor = "PT10M")
 	void fetchAllSources() {
 		try {

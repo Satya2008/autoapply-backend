@@ -95,6 +95,11 @@ public class ApplyExecutor {
 		try {
 			ApplyResult result = engines.engine().apply(application);
 			stateMachine.move(application, result.status(), result.note());
+			if (result.status() == ApplicationStatus.NEEDS_YOU) {
+				// the engine didn't apply (auto-apply is off): the candidate does, with the reason shown
+				application.needsYouBecause(result.note());
+				return Result.HANDED_OVER;
+			}
 			application.submittedVia(result.via());
 			return Result.SENT;
 		}

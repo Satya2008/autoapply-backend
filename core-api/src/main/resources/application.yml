@@ -5,6 +5,9 @@ server:
     max-swallow-size: 16MB
 
 spring:
+  config:
+    # kept on this machine only (git ignores config/*-secrets.properties): the first admin's email and password
+    import: optional:file:./config/core-secrets.properties
   application:
     name: core-api
   data:

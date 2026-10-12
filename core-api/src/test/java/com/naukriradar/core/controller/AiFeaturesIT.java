@@ -36,6 +36,7 @@ import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasItem;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -117,6 +118,46 @@ class AiFeaturesIT {
 		mvc.perform(MockMvcRequestBuilders.post("/api/v1/me/applications/" + application.getId() + "/cover-letter")
 				.header(USER_HEADER, newUser()))
 				.andExpect(status().isNotFound());
+	}
+
+	@Test
+	void aResumeTailoredToTheJobIsKeptAsAPdfAndIsTheOneUploadedWithTheApplication() throws Exception {
+		matching.stubFor(post(urlPathEqualTo("/internal/v1/ai/run"))
+				.withRequestBody(equalToJson("{\"prompt\": \"tailored-resume\"}", true, true))
+				.willReturn(okJson("""
+						{"provider": "fake", "model": "strong", "answer": {
+						  "summary": "Backend developer building payment services in Java and Kafka.",
+						  "skills": ["Java", "Kafka", "Spring Boot"],
+						  "experience": [{"title": "Backend developer", "company": "Acme Corp", "dates": "",
+						    "bullets": ["Built payment services in Java and Kafka for 2 million users"]}],
+						  "projects": [{"name": "Order tracker", "bullets": ["Spring Boot with MySQL"]}],
+						  "education": ["B.Tech, 2019"]}}""")));
+		String user = newUser();
+		uploadResume(user);
+		Application application = applications.saveAndFlush(new Application(user, UUID.randomUUID().toString(),
+				"Java Developer", "Acme", "Pune", "https://jobs.example.com/2", 80, RiskBand.MEDIUM, "unknown site", "{}"));
+		String path = "/api/v1/me/applications/" + application.getId() + "/tailored-resume";
+
+		mvc.perform(get(path).header(USER_HEADER, user)).andExpect(status().isNotFound());
+		mvc.perform(MockMvcRequestBuilders.post(path).header(USER_HEADER, user))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.resume.skills[0]").value("Java"))
+				.andExpect(jsonPath("$.resume.experience[0].company").value("Acme Corp"))
+				.andExpect(jsonPath("$.writtenBy").value("fake:strong"))
+				.andExpect(jsonPath("$.unsupported").isEmpty());
+		mvc.perform(get(path).header(USER_HEADER, user)).andExpect(jsonPath("$.resume.summary").exists());
+		byte[] pdf = mvc.perform(get(path + "/pdf").header(USER_HEADER, user))
+				.andExpect(status().isOk())
+				.andExpect(header().string("Content-Disposition", containsString("Acme.pdf")))
+				.andReturn().getResponse().getContentAsByteArray();
+		assertThat(new String(pdf, 0, 5)).isEqualTo("%PDF-");
+
+		// the worker gets this one, not the original, for this application's form
+		mvc.perform(get("/internal/v1/users/" + user + "/applications/" + application.getId() + "/resume/file"))
+				.andExpect(status().isOk())
+				.andExpect(header().string("Content-Type", MediaType.APPLICATION_PDF_VALUE))
+				.andExpect(header().string("Content-Disposition", containsString("Acme.pdf")));
+		mvc.perform(get(path).header(USER_HEADER, newUser())).andExpect(status().isNotFound());
 	}
 
 	@Test

@@ -2,6 +2,8 @@ package com.naukriradar.core.dto.response;
 
 import java.util.List;
 
+import com.naukriradar.core.dto.JobFilters;
+
 /**
  * What matching-service needs from a profile, and nothing else (no contact details).
  *
@@ -17,5 +19,6 @@ public record MatchingProfileResponse(
 		Integer experienceYears,
 		List<String> excludedCompanies,
 		List<String> excludedKeywords,
-		int minMatchScore) {
+		int minMatchScore,
+		JobFilters filters) {
 }

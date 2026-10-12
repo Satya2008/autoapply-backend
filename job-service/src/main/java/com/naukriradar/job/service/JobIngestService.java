@@ -36,6 +36,7 @@ import com.naukriradar.job.repository.JobBatchWriter;
 import com.naukriradar.job.repository.JobBatchWriter.FingerprintedJob;
 import com.naukriradar.job.repository.JobBatchWriter.WriteCounts;
 import com.naukriradar.job.repository.JobSourceRepository;
+import com.naukriradar.job.search.LocationTerms;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.cache.annotation.CacheEvict;
@@ -161,6 +162,7 @@ public class JobIngestService {
 		int skipped = 0;
 		int pages = 0;
 		Object previousFirstId = null;
+		boolean indiaOnly = "IN".equals(source.getRegion());
 
 		for (int page = 1; page <= source.getMaxPages(); page++) {
 			if (Thread.currentThread().isInterrupted()) {
@@ -184,6 +186,11 @@ public class JobIngestService {
 				if (!result.isOk()) {
 					skipped++;
 					addProblem(problems, result.skipReason());
+				}
+				// an India source keeps its Indian roles only (global companies list jobs worldwide)
+				else if (indiaOnly && !LocationTerms.inIndia(result.job().location())) {
+					skipped++;
+					addProblem(problems, result.job().externalId() + ": outside India (" + result.job().location() + ")");
 				}
 				// MySQL compares ids case-insensitively, so duplicates are judged the same way
 				else if (!seen.add(result.job().externalId().toLowerCase(Locale.ROOT))) {

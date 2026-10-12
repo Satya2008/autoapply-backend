@@ -22,6 +22,12 @@ class JobNormalizerTest {
 	private final JobNormalizer normalizer = new JobNormalizer();
 
 	@Test
+	void htmlSentEscapedBecomesTextToo() {
+		assertThat(JobNormalizer.htmlToText("&lt;div&gt;&lt;strong&gt;About Groww:&lt;/strong&gt;&lt;/div&gt;&lt;p&gt;We &amp;amp; you&lt;/p&gt;"))
+				.isEqualTo("About Groww:\nWe & you");
+	}
+
+	@Test
 	void cleansAValidJob() {
 		NormalizedJob job = ok(Map.of(
 				JobField.EXTERNAL_ID, 42,

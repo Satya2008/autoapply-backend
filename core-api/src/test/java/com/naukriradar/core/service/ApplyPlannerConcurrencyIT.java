@@ -51,7 +51,7 @@ class ApplyPlannerConcurrencyIT {
 		profileService.replaceSkills(userId, new ReplaceSkillsRequest(List.of(
 				new SkillRequest("java", 3), new SkillRequest("sql", 2), new SkillRequest("docker", 1))));
 		profileService.updateProfile(userId, new UpdateProfileRequest("Racer", null, null, null, 3, null, null, null,
-				null, null, Set.of("Backend Engineer"), Set.of(), Set.of(), Set.of(), true, 0, 50, true));
+				null, null, Set.of("Backend Engineer"), Set.of(), Set.of(), Set.of(), true, 0, 50, true, null));
 
 		List<MatchForApply> matches = new ArrayList<>();
 		for (int i = 0; i < 30; i++) {

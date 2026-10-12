@@ -102,6 +102,13 @@ public class Application {
 	@Column(name = "cover_letter_at")
 	private Instant coverLetterAt;
 
+	/** The resume tailored to this job (JSON), uploaded with this application instead of the original. */
+	@Column(name = "tailored_resume", columnDefinition = "mediumtext")
+	private String tailoredResume;
+
+	@Column(name = "tailored_resume_at")
+	private Instant tailoredResumeAt;
+
 	@CreationTimestamp
 	@Column(nullable = false, updatable = false)
 	private Instant createdAt;
@@ -164,6 +171,11 @@ public class Application {
 		this.attempts++;
 		this.lastError = error == null || error.length() <= 500 ? error : error.substring(0, 497) + "...";
 		this.nextAttemptAt = retryAt;
+	}
+
+	public void tailoredResume(String json, Instant at) {
+		this.tailoredResume = json;
+		this.tailoredResumeAt = at;
 	}
 
 	public void coverLetter(String letter, Instant at) {

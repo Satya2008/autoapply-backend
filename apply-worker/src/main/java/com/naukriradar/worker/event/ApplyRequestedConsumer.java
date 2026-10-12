@@ -1,16 +1,21 @@
 package com.naukriradar.worker.event;
 
+import java.nio.file.Path;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import com.naukriradar.common.events.IdempotentConsumer;
 import com.naukriradar.common.events.OutboxWriter;
 import com.naukriradar.common.events.Topics;
 import com.naukriradar.worker.browser.BrowserApplyEngine;
+import com.naukriradar.worker.browser.FormReviewer;
 import com.naukriradar.worker.browser.BrowserApplyEngine.FormResult;
 import com.naukriradar.worker.browser.BrowserApplyEngine.Outcome;
 import com.naukriradar.worker.client.PortalConfig;
 import com.naukriradar.worker.client.PortalConfigClient;
+import com.naukriradar.worker.client.ResumeFiles;
 import com.naukriradar.worker.service.ApplyAttempts;
 import com.naukriradar.worker.service.ScreenshotStore;
 import org.slf4j.Logger;
@@ -37,18 +42,23 @@ public class ApplyRequestedConsumer {
 	private final ApplyAttempts attempts;
 	private final PortalConfigClient portals;
 	private final BrowserApplyEngine engine;
+	private final FormReviewer labels;
+	private final ResumeFiles resumeFiles;
 	private final ScreenshotStore screenshots;
 	private final OutboxWriter outbox;
 	private final JsonMapper json;
 	private final TransactionTemplate transaction;
 
 	public ApplyRequestedConsumer(IdempotentConsumer idempotent, ApplyAttempts attempts, PortalConfigClient portals,
-			BrowserApplyEngine engine, ScreenshotStore screenshots, OutboxWriter outbox, JsonMapper json,
+			BrowserApplyEngine engine, FormReviewer labels, ResumeFiles resumeFiles, ScreenshotStore screenshots, OutboxWriter outbox,
+			JsonMapper json,
 			PlatformTransactionManager transactionManager) {
 		this.idempotent = idempotent;
 		this.attempts = attempts;
 		this.portals = portals;
 		this.engine = engine;
+		this.labels = labels;
+		this.resumeFiles = resumeFiles;
 		this.screenshots = screenshots;
 		this.outbox = outbox;
 		this.json = json;
@@ -81,7 +91,27 @@ public class ApplyRequestedConsumer {
 					"No form mapping is set up for this site yet.", null);
 		}
 		log.info("Applying {} (attempt {}) on {}", request.applicationId(), request.attempt(), portal.get().name());
-		return engine.apply(request.applyUrl(), portal.get().selectors(), request.answers(), true);
+		Map<String, String> answers = new HashMap<>(request.answers());
+		Path resume = null;
+		try {
+			if (portal.get().selectors().containsKey(BrowserApplyEngine.RESUME)) {
+				// the form wants the file itself, not the name core-api lists among the answers
+				try {
+					resume = resumeFiles.download(request.userId(), request.applicationId());
+					answers.put(BrowserApplyEngine.RESUME, resume.toString());
+				}
+				catch (RuntimeException ex) {
+					log.info("No resume for {}: {}", request.applicationId(), ex.getMessage());
+					return new FormResult(Outcome.NEEDS_YOU, List.of(), List.of(BrowserApplyEngine.RESUME),
+							"This form needs your resume and none could be attached. Upload one on the Resume page.", null);
+				}
+			}
+			// the mapping fills the standard fields, the profile's answer bank the usual extra questions
+			return engine.apply(request.applyUrl(), portal.get().selectors(), answers, true, labels::fillByLabels);
+		}
+		finally {
+			resumeFiles.remove(resume);
+		}
 	}
 
 	private void report(ApplyRequested request, FormResult result) {

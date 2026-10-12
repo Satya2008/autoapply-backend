@@ -16,7 +16,11 @@ import com.naukriradar.job.dto.request.JobSourceRequest;
 import com.naukriradar.job.exception.InvalidSourceConfigException;
 import com.naukriradar.job.model.JobField;
 import com.naukriradar.job.model.RequestMethod;
+import com.naukriradar.job.model.SourceType;
+import com.naukriradar.job.provider.CssMapping;
+import com.naukriradar.job.provider.FieldMappings;
 import com.naukriradar.job.provider.SettingPlaceholderResolver;
+import org.jsoup.select.Selector;
 import org.springframework.stereotype.Component;
 
 /**
@@ -46,8 +50,17 @@ public class JobSourceValidator {
 		}
 		checkHeaders(request.headers(), problems);
 		checkBody(request, problems);
-		checkJsonPath("resultsPath", request.resultsPath(), problems);
-		checkFieldMappings(request.fieldMappings(), problems);
+		boolean html = request.type() == SourceType.HTML_SCRAPE;
+		if (html && request.method() != RequestMethod.GET) {
+			problems.add("scraped pages are read with GET");
+		}
+		if (html) {
+			checkSelector("resultsPath", request.resultsPath(), problems);
+		}
+		else {
+			checkJsonPath("resultsPath", request.resultsPath(), problems);
+		}
+		checkFieldMappings(request.fieldMappings(), html, problems);
 		if (!problems.isEmpty()) {
 			throw new InvalidSourceConfigException(problems);
 		}
@@ -113,7 +126,7 @@ public class JobSourceValidator {
 		checkVariables("bodyTemplate", request.bodyTemplate(), problems);
 	}
 
-	private static void checkFieldMappings(Map<String, String> mappings, List<String> problems) {
+	private static void checkFieldMappings(Map<String, String> mappings, boolean html, List<String> problems) {
 		for (JobField field : JobField.values()) {
 			if (field.isRequired() && !mappings.containsKey(field.getKey())) {
 				problems.add("fieldMappings needs " + field.getKey());
@@ -123,8 +136,27 @@ public class JobSourceValidator {
 			if (JobField.fromKey(key.strip()).isEmpty()) {
 				problems.add("fieldMappings has unknown field '" + key + "'");
 			}
-			checkJsonPath("fieldMappings." + key, path, problems);
+			if (FieldMappings.isLiteral(path.strip())) {
+				if (FieldMappings.literal(path.strip()).isBlank()) {
+					problems.add("fieldMappings." + key + " is a fixed value but has nothing after '='");
+				}
+			}
+			else if (html) {
+				checkSelector("fieldMappings." + key, path, problems);
+			}
+			else {
+				checkJsonPath("fieldMappings." + key, path, problems);
+			}
 		});
+	}
+
+	private static void checkSelector(String where, String mapping, List<String> problems) {
+		try {
+			CssMapping.parse(mapping).validate();
+		}
+		catch (Selector.SelectorParseException | IllegalArgumentException ex) {
+			problems.add(where + " is not a valid CSS selector: " + ex.getMessage());
+		}
 	}
 
 	private static void checkJsonPath(String where, String path, List<String> problems) {

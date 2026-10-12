@@ -10,6 +10,7 @@ import java.util.UUID;
 import com.github.tomakehurst.wiremock.client.WireMock;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import com.jayway.jsonpath.JsonPath;
+import com.naukriradar.matching.embedding.HashingEmbedder;
 import com.naukriradar.matching.dto.request.AiProviderCreateRequest;
 import com.naukriradar.matching.dto.request.AiProviderUpdateRequest;
 import com.naukriradar.matching.model.AiProviderType;
@@ -106,7 +107,7 @@ class EvalAdminIT {
 		String run = finished(start("{\"kind\": \"MATCHER\"}"));
 
 		assertThat(JsonPath.<String>read(run, "$.status")).isEqualTo("SUCCEEDED");
-		assertThat(JsonPath.<String>read(run, "$.metrics.embeddingModel")).isEqualTo("local:hashing-v1");
+		assertThat(JsonPath.<String>read(run, "$.metrics.embeddingModel")).isEqualTo(HashingEmbedder.MODEL_KEY);
 		assertThat(JsonPath.<Integer>read(run, "$.metrics.keyword.cases")).isGreaterThanOrEqualTo(16);
 		assertThat(JsonPath.<Double>read(run, "$.metrics.hybrid.mae")).isNotNull();
 		assertThat(JsonPath.<String>read(run, "$.metrics.verdict")).contains("keyword-only");

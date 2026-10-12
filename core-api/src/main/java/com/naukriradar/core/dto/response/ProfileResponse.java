@@ -3,6 +3,9 @@ package com.naukriradar.core.dto.response;
 import java.time.Instant;
 import java.util.List;
 
+import com.naukriradar.core.dto.ApplicationDetails;
+import com.naukriradar.core.dto.JobFilters;
+
 public record ProfileResponse(
 		String userId,
 		String fullName,
@@ -23,5 +26,7 @@ public record ProfileResponse(
 		int minMatchScore,
 		int dailyApplyLimit,
 		boolean autoApplyEnabled,
-		Instant updatedAt) {
+		Instant updatedAt,
+		ApplicationDetails details,
+		JobFilters filters) {
 }

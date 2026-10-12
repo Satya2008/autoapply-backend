@@ -15,7 +15,7 @@ New-Item -ItemType Directory -Force $logs | Out-Null
 
 if (-not (Test-Path $config)) {
 	$lines = Get-Content (Join-Path $kafka 'config\server.properties')
-	$lines = $lines -replace '^log.dirs=.*', ('log.dirs=' + ($data -replace '\', '/'))
+	$lines = $lines -replace '^log.dirs=.*', ('log.dirs=' + ($data -replace '\\', '/'))
 	[IO.File]::WriteAllLines($config, $lines)
 }
 if (-not (Test-Path (Join-Path $data 'meta.properties'))) {

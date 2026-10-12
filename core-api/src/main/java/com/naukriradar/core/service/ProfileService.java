@@ -50,6 +50,11 @@ public class ProfileService {
 		replace(profile.getPreferredLocations(), normaliseLabels(request.preferredLocations()).values());
 		replace(profile.getExcludedCompanies(), normaliseLabels(request.excludedCompanies()).keySet());
 		replace(profile.getExcludedKeywords(), normaliseLabels(request.excludedKeywords()).keySet());
+		if (request.filters() != null) {
+			List<String> mustHave = request.filters().mustHave();
+			replace(profile.getMustHaveKeywords(),
+					normaliseLabels(mustHave).values());
+		}
 		checkAutoApplyPrerequisites(profile);
 		// flush so the response has the new updatedAt and version
 		return mapper.toResponse(profileRepository.saveAndFlush(profile));

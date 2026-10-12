@@ -85,6 +85,19 @@ public class JobMatchWriter {
 				Map.of("userId", userId, "jobIds", jobIds));
 	}
 
+	/**
+	 * Removes every match of the user except these: after a full run, a match the run didn't
+	 * keep is stale (the job left the shortlist, or the user's filters now rule it out).
+	 */
+	@Transactional
+	public int deleteAllExcept(String userId, Collection<String> keepJobIds) {
+		if (keepJobIds.isEmpty()) {
+			return jdbc.update("DELETE FROM job_matches WHERE user_id = ?", userId);
+		}
+		return namedJdbc.update("DELETE FROM job_matches WHERE user_id = :userId AND job_id NOT IN (:jobIds)",
+				Map.of("userId", userId, "jobIds", keepJobIds));
+	}
+
 	/** The AI review of one match; local score and the rest stay as they are. */
 	public void saveAiScore(String userId, String jobId, int score, String reasonsJson, String scoredBy, Instant at) {
 		jdbc.update(con -> {

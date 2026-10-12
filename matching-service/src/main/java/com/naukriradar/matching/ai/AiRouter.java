@@ -34,6 +34,9 @@ public class AiRouter {
 
 	private static final int MAX_TOKENS = 1024;
 
+	/** Prompts whose answer is a whole document (a tailored resume) get more room. */
+	private static final Map<String, Integer> LONGER = Map.of("tailored-resume", 8192);
+
 	private final AiProperties properties;
 	private final AiProviderService providers;
 	private final Map<AiProviderType, AiClient> clients = new EnumMap<>(AiProviderType.class);
@@ -133,7 +136,8 @@ public class AiRouter {
 		catch (IllegalArgumentException ex) {
 			throw new BadRequestException("Prompt " + promptCode + ": " + ex.getMessage());
 		}
-		return new AiRequest(promptCode, userId, prompt.system(), text, prompt.outputSchema(), MAX_TOKENS);
+		return new AiRequest(promptCode, userId, prompt.system(), text, prompt.outputSchema(),
+				LONGER.getOrDefault(promptCode, MAX_TOKENS));
 	}
 
 	private AiResult complete(AiRequest request, List<AiProviderService.Target> targets) {
@@ -150,7 +154,8 @@ public class AiRouter {
 			long started = System.nanoTime();
 			AiCompletion completion;
 			try {
-				completion = resilience.call("ai-" + provider, () -> client.complete(connection, target.model(), request));
+				// one breaker per model: an overloaded model doesn't pause the provider's others
+				completion = resilience.call("ai-" + provider + "-" + target.model(), () -> client.complete(connection, target.model(), request));
 			}
 			catch (RuntimeException ex) {
 				log.warn("AI provider {} failed for {}: {}", target, request.purpose(), describe(ex));

@@ -103,7 +103,7 @@ class RateLimitTests {
 			String user = UUID.randomUUID().toString();
 			for (int i = 0; i < 5; i++) {
 				HttpResponse<String> response = send(HttpRequest.newBuilder(uri("/api/v1/me/matches/runs"))
-						.header("X-User-Id", user));
+						.header("Authorization", "Bearer user-" + user));
 				assertThat(response.statusCode()).isEqualTo(200);
 				assertThat(response.headers().firstValue("X-RateLimit-Limit")).hasValue("100");
 			}
@@ -111,9 +111,9 @@ class RateLimitTests {
 
 		@Test
 		void ipRulesIgnoreTheUserHeaderAndUntrustedForwardedFor() throws Exception {
-			assertThat(send(HttpRequest.newBuilder(uri("/api/v1/jobs/1")).header("X-User-Id", "a")).statusCode())
+			assertThat(send(HttpRequest.newBuilder(uri("/api/v1/jobs/1")).header("Authorization", "Bearer user-" + "a")).statusCode())
 					.isEqualTo(200);
-			assertThat(send(HttpRequest.newBuilder(uri("/api/v1/jobs/2")).header("X-User-Id", "b")
+			assertThat(send(HttpRequest.newBuilder(uri("/api/v1/jobs/2")).header("Authorization", "Bearer user-" + "b")
 					.header("X-Forwarded-For", "198.51.100.7")).statusCode()).isEqualTo(429);
 		}
 
@@ -135,7 +135,7 @@ class RateLimitTests {
 		}
 
 		private HttpResponse<String> post(String path, String user) throws Exception {
-			return send(HttpRequest.newBuilder(uri(path)).header("X-User-Id", user).POST(HttpRequest.BodyPublishers.noBody()));
+			return send(HttpRequest.newBuilder(uri(path)).header("Authorization", "Bearer user-" + user).POST(HttpRequest.BodyPublishers.noBody()));
 		}
 
 		private URI uri(String path) {
@@ -162,7 +162,7 @@ class RateLimitTests {
 			for (int i = 0; i < 4; i++) {
 				HttpResponse<String> response = send(HttpRequest.newBuilder(
 						URI.create("http://localhost:" + port + "/api/v1/me/matches/runs"))
-						.header("X-User-Id", "u-1").POST(HttpRequest.BodyPublishers.noBody()));
+						.header("Authorization", "Bearer user-" + "u-1").POST(HttpRequest.BodyPublishers.noBody()));
 
 				assertThat(response.statusCode()).isEqualTo(200);
 				assertThat(response.headers().firstValue("X-RateLimit-Limit")).isEmpty();
@@ -179,6 +179,17 @@ class RateLimitTests {
 		try {
 			HttpServer server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
 			server.createContext("/", exchange -> {
+				if (exchange.getRequestURI().getPath().equals("/internal/v1/sessions/resolve")) {
+					// "user-<id>" is that user's session
+					String token = new String(exchange.getRequestBody().readAllBytes())
+							.replaceAll("(?s).*\"token\"\\s*:\\s*\"([^\"]*)\".*", "$1");
+					byte[] json = ("{\"userId\": \"" + token.replaceFirst("^user-", "") + "\", \"role\": \"USER\"}").getBytes();
+					exchange.getResponseHeaders().set("Content-Type", "application/json");
+					exchange.sendResponseHeaders(200, json.length);
+					exchange.getResponseBody().write(json);
+					exchange.close();
+					return;
+				}
 				byte[] bytes = "ok".getBytes();
 				exchange.sendResponseHeaders(200, bytes.length);
 				exchange.getResponseBody().write(bytes);

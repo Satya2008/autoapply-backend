@@ -27,6 +27,8 @@ naukriradar:
     matching-service-url: http://localhost:18083
     # the same WireMock plays job-service (job descriptions for cover letters)
     job-service-url: http://localhost:18083
+    # and the apply worker ("Fill & Review")
+    apply-worker-url: http://localhost:18083
   security:
     encryption-key: qm/EECDO4DzcKUTPq4yhw2TNC1fGcjzfcFdyxJWoIZ8=
   scheduler:

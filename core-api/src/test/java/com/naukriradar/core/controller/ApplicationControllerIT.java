@@ -9,6 +9,7 @@ import java.util.UUID;
 import com.github.tomakehurst.wiremock.client.WireMock;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import com.jayway.jsonpath.JsonPath;
+import com.naukriradar.core.engine.SimulatedApplyEngine;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -72,25 +73,52 @@ class ApplicationControllerIT {
 				.andExpect(jsonPath("$.status").value("SUCCESS"))
 				.andExpect(jsonPath("$.matchesConsidered").value(4))
 				.andExpect(jsonPath("$.queued").value(1))
-				.andExpect(jsonPath("$.simulated").value(1))
-				.andExpect(jsonPath("$.needsYou").value(2))
+				// auto-apply is off, so the safe site is handed over too instead of "simulated"
+				.andExpect(jsonPath("$.simulated").value(0))
+				.andExpect(jsonPath("$.needsYou").value(3))
 				.andExpect(jsonPath("$.belowScore").value(1));
 
 		mvc.perform(get(APPS + "/needs-you").header(USER_HEADER, user))
-				.andExpect(jsonPath("$[*].application.jobId", contains("li", "unknown")))
-				.andExpect(jsonPath("$[0].reason").value("linkedin.com doesn't allow automated applications."))
-				.andExpect(jsonPath("$[0].prefill.email").value(startsWith("apply-")))
-				.andExpect(jsonPath("$[0].prefill.expectedSalary").value("₹12,00,000 per year"))
-				.andExpect(jsonPath("$[0].application.riskBand").value("HIGH"));
+				.andExpect(jsonPath("$[*].application.jobId", containsInAnyOrder("li", "unknown", "gh")))
+				.andExpect(jsonPath("$[?(@.application.jobId == 'li')].reason", hasItem("This site doesn't allow automated applications, so you apply there yourself.")))
+				.andExpect(jsonPath("$[?(@.application.jobId == 'li')].prefill.email", hasItem(startsWith("apply-"))))
+				.andExpect(jsonPath("$[?(@.application.jobId == 'li')].prefill.expectedSalary", hasItem("₹12,00,000 per year")))
+				.andExpect(jsonPath("$[?(@.application.jobId == 'li')].application.riskBand", hasItem("HIGH")))
+				.andExpect(jsonPath("$[?(@.application.jobId == 'gh')].reason", hasItem(SimulatedApplyEngine.NOTE)));
 
 		String gh = appId(user, "gh");
 		mvc.perform(get(APPS + "/" + gh).header(USER_HEADER, user))
-				.andExpect(jsonPath("$.application.status").value("SIMULATED"))
-				.andExpect(jsonPath("$.application.submittedVia").value("SIMULATED"))
-				.andExpect(jsonPath("$.timeline[*].toStatus", contains("PLANNED", "QUEUED", "SIMULATED")))
-				.andExpect(jsonPath("$.timeline[2].note").value("Simulated: nothing was sent to the employer."));
+				.andExpect(jsonPath("$.application.status").value("NEEDS_YOU"))
+				.andExpect(jsonPath("$.application.submittedVia").doesNotExist())
+				.andExpect(jsonPath("$.timeline[*].toStatus", contains("PLANNED", "QUEUED", "NEEDS_YOU")))
+				.andExpect(jsonPath("$.timeline[2].note").value(SimulatedApplyEngine.NOTE));
 		mvc.perform(get(APPS + "/" + appId(user, "li")).header(USER_HEADER, user))
 				.andExpect(jsonPath("$.timeline[*].toStatus", not(hasItem("QUEUED"))));
+	}
+
+	@Test
+	void fillForMeOnAMatchOnAnUnknownSiteMakesTheApplicationAndFillsIt() throws Exception {
+		String user = userWithProfile(true, 10);
+		stubMatches(user, match("acme", 88, "https://careers.example.org/jobs/9"));
+		matching.stubFor(WireMock.post(urlPathEqualTo("/internal/v1/review")).willReturn(okJson("""
+				{"opened": true, "filled": ["email", "phone"], "aiAnswered": {}, "leftForYou": ["Gender"], "note": null}
+				""")));
+
+		String body = mvc.perform(post(APPS + "/from-match/acme/fill-review").header(USER_HEADER, user))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.fill.opened").value(true))
+				.andReturn().getResponse().getContentAsString();
+		String id = JsonPath.read(body, "$.applicationId");
+
+		// an unknown site has no portal mapping: the worker gets none and reads the labels itself
+		matching.verify(WireMock.postRequestedFor(urlPathEqualTo("/internal/v1/review"))
+				.withRequestBody(WireMock.matchingJsonPath("$.selectors.size()", WireMock.equalTo("0"))));
+		mvc.perform(get(APPS + "/" + id).header(USER_HEADER, user))
+				.andExpect(jsonPath("$.application.status").value("NEEDS_YOU"))
+				.andExpect(jsonPath("$.needsYouReason").value("Ready in Chrome: filled 2 fields; still to answer: Gender."));
+		// again: the same application, not a second one
+		mvc.perform(post(APPS + "/from-match/acme/fill-review").header(USER_HEADER, user))
+				.andExpect(jsonPath("$.applicationId").value(id));
 	}
 
 	@Test
@@ -112,11 +140,13 @@ class ApplicationControllerIT {
 		stubMatches(user, match("first", 90, "https://boards.greenhouse.io/x/1"),
 				match("second", 85, "https://jobs.lever.co/x/2"));
 
-		runToEnd(user).andExpect(jsonPath("$.queued").value(1)).andExpect(jsonPath("$.needsYou").value(1));
+		// the one within the limit is queued; with auto-apply off the engine hands it over as well
+		runToEnd(user).andExpect(jsonPath("$.queued").value(1)).andExpect(jsonPath("$.needsYou").value(2));
 
 		mvc.perform(get(APPS + "/needs-you").header(USER_HEADER, user))
-				.andExpect(jsonPath("$[0].application.jobId").value("second"))
-				.andExpect(jsonPath("$[0].reason").value("Today's limit of 1 automatic applications is reached."));
+				.andExpect(jsonPath("$[?(@.application.jobId == 'second')].reason",
+						hasItem("Today's limit of 1 automatic applications is reached.")))
+				.andExpect(jsonPath("$[?(@.application.jobId == 'first')].reason", hasItem(SimulatedApplyEngine.NOTE)));
 	}
 
 	@Test
@@ -209,7 +239,7 @@ class ApplicationControllerIT {
 
 		runToEnd(user).andExpect(jsonPath("$.queued").value(1));
 		mvc.perform(get(APPS + "/" + appId(user, "own")).header(USER_HEADER, user))
-				.andExpect(jsonPath("$.riskReason").value("Acme careers is set to LOW risk by an admin."));
+				.andExpect(jsonPath("$.riskReason").value("We know this site's application form, so it can be sent for you."));
 
 		mvc.perform(post("/api/v1/admin/portals").contentType(MediaType.APPLICATION_JSON)
 				.content("{\"domain\": \"" + domain + "\", \"name\": \"Again\", \"riskBand\": \"HIGH\", \"enabled\": true}"))

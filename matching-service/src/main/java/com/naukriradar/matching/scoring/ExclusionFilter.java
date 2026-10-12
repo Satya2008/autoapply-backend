@@ -13,9 +13,9 @@ import com.naukriradar.matching.client.CandidateJob;
 import com.naukriradar.matching.client.MatchingProfile;
 
 /**
- * The candidate's "never show me" rules: companies they don't want, and words (like
- * "unpaid" or "night shift") that rule a job out. Whole-word matches only, so excluding
- * "Meta" doesn't drop "Metaflow Labs".
+ * The candidate's "never show me" rules: companies they don't want, words (like
+ * "unpaid" or "night shift") that rule a job out, and their job filters ({@link JobRules}).
+ * Whole-word matches only, so excluding "Meta" doesn't drop "Metaflow Labs".
  */
 public final class ExclusionFilter {
 
@@ -24,11 +24,14 @@ public final class ExclusionFilter {
 	/** Lower case, matched with {@link TextMatcher#containsWord}. */
 	private final Set<String> keywords;
 
+	private final JobRules rules;
+
 	public ExclusionFilter(MatchingProfile profile) {
 		this.companies = compile(profile.excludedCompanies());
 		this.keywords = profile.excludedKeywords().stream()
 				.map(k -> k.strip().toLowerCase(Locale.ROOT))
 				.collect(Collectors.toCollection(LinkedHashSet::new));
+		this.rules = new JobRules(profile);
 	}
 
 	/** Why the job is excluded, or null if it isn't. */
@@ -46,7 +49,7 @@ public final class ExclusionFilter {
 				return "keyword " + keyword;
 			}
 		}
-		return null;
+		return rules.reason(job);
 	}
 
 	private static Map<String, Pattern> compile(List<String> terms) {
