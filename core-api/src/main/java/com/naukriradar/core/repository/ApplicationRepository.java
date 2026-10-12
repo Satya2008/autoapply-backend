@@ -22,6 +22,10 @@ public interface ApplicationRepository extends JpaRepository<Application, String
 	@Query("select a.jobId from Application a where a.userId = :userId and a.jobId in :jobIds")
 	Set<String> findJobIds(@Param("userId") String userId, @Param("jobIds") Collection<String> jobIds);
 
+	/** Job ids this user has an application for in any of these statuses (used to hide applied jobs from Matches). */
+	@Query("select a.jobId from Application a where a.userId = :userId and a.status in :statuses")
+	Set<String> findJobIdsByStatusIn(@Param("userId") String userId, @Param("statuses") Collection<ApplicationStatus> statuses);
+
 	long countByUserIdAndAutomatedTrueAndCreatedAtGreaterThanEqual(String userId, Instant since);
 
 	List<Application> findByUserIdAndStatusAndNextAttemptAtLessThanEqual(String userId, ApplicationStatus status,
@@ -39,6 +43,15 @@ public interface ApplicationRepository extends JpaRepository<Application, String
 			+ " and a.id < :afterId order by a.id desc")
 	List<Application> pageAfter(@Param("userId") String userId, @Param("status") ApplicationStatus status,
 			@Param("afterId") String afterId, Pageable page);
+
+	@Query("select a from Application a where a.userId = :userId and a.status in :statuses order by a.id desc")
+	List<Application> firstPageByStatusIn(@Param("userId") String userId,
+			@Param("statuses") Collection<ApplicationStatus> statuses, Pageable page);
+
+	@Query("select a from Application a where a.userId = :userId and a.status in :statuses and a.id < :afterId"
+			+ " order by a.id desc")
+	List<Application> pageAfterByStatusIn(@Param("userId") String userId,
+			@Param("statuses") Collection<ApplicationStatus> statuses, @Param("afterId") String afterId, Pageable page);
 
 	List<Application> findByUserIdAndStatusOrderByMatchScoreDescIdDesc(String userId, ApplicationStatus status,
 			Pageable page);

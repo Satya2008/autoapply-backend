@@ -226,6 +226,27 @@ class ApplicationControllerIT {
 	}
 
 	@Test
+	void appliedViewAndAppliedJobIdsCountOnlyJobsActuallyApplied() throws Exception {
+		String user = userWithProfile(true, 10);
+		stubMatches(user, match("x", 90, "https://www.linkedin.com/jobs/1"), match("y", 80, "https://www.indeed.com/2"));
+		runToEnd(user);
+
+		// both land in NEEDS_YOU (sites we can't auto-apply): nothing is "applied" yet
+		mvc.perform(get(APPS).header(USER_HEADER, user).param("applied", "true")).andExpect(jsonPath("$.items", hasSize(0)));
+		mvc.perform(get(APPS + "/applied-job-ids").header(USER_HEADER, user)).andExpect(jsonPath("$", hasSize(0)));
+
+		// the user applies to x themselves and marks it done
+		mvc.perform(post(APPS + "/" + appId(user, "x") + "/done").header(USER_HEADER, user))
+				.andExpect(jsonPath("$.application.status").value("APPLIED"));
+
+		// the applied view and applied-job-ids now show only x; y (still NEEDS_YOU) stays out
+		mvc.perform(get(APPS).header(USER_HEADER, user).param("applied", "true"))
+				.andExpect(jsonPath("$.items[*].jobId", containsInAnyOrder("x")));
+		mvc.perform(get(APPS + "/applied-job-ids").header(USER_HEADER, user))
+				.andExpect(jsonPath("$", containsInAnyOrder("x")));
+	}
+
+	@Test
 	void adminPortalOverrideCanMakeASiteSafeToAutomate() throws Exception {
 		String domain = "careers-" + UUID.randomUUID().toString().substring(0, 8) + ".example.com";
 		String portalId = JsonPath.read(mvc.perform(post("/api/v1/admin/portals").contentType(MediaType.APPLICATION_JSON)

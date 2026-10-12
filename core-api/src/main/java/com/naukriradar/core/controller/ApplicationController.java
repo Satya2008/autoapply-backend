@@ -164,9 +164,16 @@ public class ApplicationController {
 	@GetMapping
 	public ApplicationPageResponse list(
 			@RequestParam(required = false) ApplicationStatus status,
+			@RequestParam(defaultValue = "false") boolean applied,
 			@RequestParam(required = false) @Size(max = 40) String cursor,
 			@RequestParam(defaultValue = "20") @Min(1) @Max(100) int limit) {
-		return applicationService.list(currentUser.currentUserId(), status, cursor, limit);
+		return applicationService.list(currentUser.currentUserId(), status, applied, cursor, limit);
+	}
+
+	/** Job ids already applied to (SUBMITTED/APPLIED/…), so the Matches screen can hide them. */
+	@GetMapping("/applied-job-ids")
+	public List<String> appliedJobIds() {
+		return applicationService.appliedJobIds(currentUser.currentUserId());
 	}
 
 	/** The ones you have to send yourself, best match first, with answers to copy. */

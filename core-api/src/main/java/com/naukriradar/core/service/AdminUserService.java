@@ -78,7 +78,7 @@ public class AdminUserService {
 		}
 		return new AdminUserDetailResponse(summary(user), profileService.getProfile(userId), profileService.getSkills(userId),
 				resumes.findByUserId(userId).map(Resume::getFileName).orElse(null), stats,
-				applicationService.list(userId, null, null, 20).items(), matches);
+				applicationService.list(userId, null, false, null, 20).items(), matches);
 	}
 
 	/** Disabling signs the user out everywhere at once. */

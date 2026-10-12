@@ -66,21 +66,35 @@ public class ApplicationService {
 		this.properties = properties;
 	}
 
-	/** Newest first, optionally one status; keyset-paged on the (time-ordered) id. */
+	/**
+	 * Newest first, keyset-paged on the (time-ordered) id. With a {@code status} it returns just that
+	 * one; otherwise {@code appliedOnly} true returns every status the user has actually applied in
+	 * (SUBMITTED, APPLIED, INTERVIEW, OFFER, REJECTED) and false returns everything.
+	 */
 	@Transactional(readOnly = true)
-	public ApplicationPageResponse list(String userId, ApplicationStatus status, String cursor, int limit) {
+	public ApplicationPageResponse list(String userId, ApplicationStatus status, boolean appliedOnly, String cursor, int limit) {
 		PageRequest page = PageRequest.of(0, limit + 1);
+		boolean byAppliedSet = status == null && appliedOnly;
 		List<Application> rows;
 		if (cursor == null || cursor.isBlank()) {
-			rows = repository.firstPage(userId, status, page);
+			rows = byAppliedSet ? repository.firstPageByStatusIn(userId, ApplicationStatus.SENT, page)
+					: repository.firstPage(userId, status, page);
 		}
 		else {
-			rows = repository.pageAfter(userId, status, validCursor(cursor), page);
+			String after = validCursor(cursor);
+			rows = byAppliedSet ? repository.pageAfterByStatusIn(userId, ApplicationStatus.SENT, after, page)
+					: repository.pageAfter(userId, status, after, page);
 		}
 		boolean more = rows.size() > limit;
 		List<Application> items = more ? rows.subList(0, limit) : rows;
 		String next = more ? items.get(items.size() - 1).getId() : null;
 		return new ApplicationPageResponse(items.stream().map(mapper::toSummary).toList(), next);
+	}
+
+	/** Job ids the user has actually applied to: used to drop them from the Matches list. */
+	@Transactional(readOnly = true)
+	public List<String> appliedJobIds(String userId) {
+		return List.copyOf(repository.findJobIdsByStatusIn(userId, ApplicationStatus.SENT));
 	}
 
 	@Transactional(readOnly = true)
