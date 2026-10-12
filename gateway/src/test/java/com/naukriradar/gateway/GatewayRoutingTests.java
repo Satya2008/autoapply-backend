@@ -250,6 +250,23 @@ class GatewayRoutingTests {
 	}
 
 	@Test
+	void percentEncodingTheAdminPathDoesNotSkipTheAdminCheck() throws Exception {
+		String user = "Bearer user-77777777-7777-7777-7777-777777777777";
+		// "%61" is "a" and "%69" is "i": the router still sends these to the admin backend, so the
+		// admin guard has to decode the path too or a normal user would read the whole admin console.
+		assertThat(send(HttpRequest.newBuilder(uri("/api/v1/%61dmin/users")).header("Authorization", user)).statusCode())
+				.isEqualTo(403);
+		assertThat(send(HttpRequest.newBuilder(uri("/api/v1/adm%69n/users")).header("Authorization", user)).statusCode())
+				.isEqualTo(403);
+		assertThat(send(HttpRequest.newBuilder(uri("/api/v1/%61dmin/users/" + ADMIN + "/role")).header("Authorization", user)
+				.method("PATCH", HttpRequest.BodyPublishers.ofString("{\"role\":\"ADMIN\"}"))).statusCode())
+				.isEqualTo(403);
+		// the admin still gets through on the decoded path
+		assertThat(send(HttpRequest.newBuilder(uri("/api/v1/%61dmin/users"))).body())
+				.isEqualTo("core-api saw GET /api/v1/admin/users as " + ADMIN);
+	}
+
+	@Test
 	void signingOutEverywhereEndsTheSessionAtOnce() throws Exception {
 		String token = "Bearer user-88888888-8888-8888-8888-888888888888";
 		assertThat(send(HttpRequest.newBuilder(uri("/api/v1/me/profile")).header("Authorization", token)).statusCode()).isEqualTo(200);
