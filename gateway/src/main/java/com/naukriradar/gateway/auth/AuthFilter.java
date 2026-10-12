@@ -7,6 +7,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,8 +34,9 @@ import reactor.core.publisher.Mono;
  * request goes on with X-User-Id and X-User-Role set here. Whatever a client puts in those two
  * headers is dropped, so nobody can pose as someone else. /api/v1/admin is for admins only.
  *
- * <p>Answers are cached for a short while, so a busy page doesn't ask core-api on every call; a
- * signed-out or disabled session stops working within that time.
+ * <p>Answers are cached for a short while, so a busy page doesn't ask core-api on every call. Calls that
+ * end sessions or change who someone is (sign out, sign out everywhere, an admin disabling a user,
+ * changing their role or password) drop the cached answers for that user at once.
  */
 @Component
 public class AuthFilter implements GlobalFilter, Ordered {
@@ -78,6 +81,11 @@ public class AuthFilter implements GlobalFilter, Ordered {
 			// test helpers: not public
 			return problem(exchange, HttpStatus.NOT_FOUND, "Not found.");
 		}
+		if (path.equals("/api/v1/auth/logout")) {
+			String token = token(request, path);
+			return chain.filter(exchange.mutate().request(clean).build())
+					.doFinally(signal -> Optional.ofNullable(token).ifPresent(cache::remove));
+		}
 		if (OPEN.contains(path) || request.getMethod() == HttpMethod.OPTIONS) {
 			return chain.filter(exchange.mutate().request(clean).build());
 		}
@@ -105,8 +113,32 @@ public class AuthFilter implements GlobalFilter, Ordered {
 						h.set(USER_HEADER, user.userId());
 						h.set(ROLE_HEADER, user.role());
 					}).build();
-					return chain.filter(exchange.mutate().request(signedIn).build());
+					// after core-api has made the change, so no call in between caches the old answer
+					return chain.filter(exchange.mutate().request(signedIn).build())
+							.doFinally(signal -> forgetIfSessionsChange(request.getMethod(), path, user));
 				});
+	}
+
+	private static final Pattern ADMIN_USER_CHANGE = Pattern.compile("/api/v1/admin/users/([^/]+)/(status|role|reset-password)");
+
+	/** Whose cached sessions a call makes stale, if any: they are asked again on their next call. */
+	private void forgetIfSessionsChange(HttpMethod method, String path, SessionUser user) {
+		if (method == HttpMethod.GET) {
+			return;
+		}
+		String whose = null;
+		if (path.equals("/api/v1/auth/logout-everywhere") || path.equals("/api/v1/auth/change-password")) {
+			whose = user.userId();
+		} else {
+			Matcher m = ADMIN_USER_CHANGE.matcher(path);
+			if (m.matches()) {
+				whose = m.group(1);
+			}
+		}
+		if (whose != null) {
+			String userId = whose;
+			cache.values().removeIf(c -> c.user().userId().equals(userId));
+		}
 	}
 
 	/** Stands for "couldn't ask core-api" inside the chain above. */

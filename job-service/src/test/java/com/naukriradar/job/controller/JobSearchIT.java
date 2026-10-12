@@ -27,9 +27,11 @@ import org.springframework.test.web.servlet.ResultActions;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.containsInAnyOrder;
+import static org.hamcrest.Matchers.everyItem;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.hasSize;
+import static org.hamcrest.Matchers.nullValue;
 import static org.hamcrest.Matchers.startsWith;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -194,12 +196,26 @@ class JobSearchIT {
 		String body = search(Map.of("q", "golang")).andReturn().getResponse().getContentAsString();
 		String id = JsonPath.read(body, "$.items[0].id");
 
-		mvc.perform(get("/api/v1/jobs/" + id))
+		mvc.perform(get("/api/v1/jobs/" + id).header("X-User-Role", "ADMIN"))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.externalId").value("j6"))
 				.andExpect(jsonPath("$.description").value(startsWith("Golang Engineer at Stark")))
 				.andExpect(jsonPath("$.status").value("ACTIVE"));
 		mvc.perform(get("/api/v1/jobs/" + UUID.randomUUID())).andExpect(status().isNotFound());
+	}
+
+	@Test
+	void usersAreNotToldWhereAJobCameFrom() throws Exception {
+		String body = search(Map.of("q", "golang")).andReturn().getResponse().getContentAsString();
+		String id = JsonPath.read(body, "$.items[0].id");
+
+		mvc.perform(get("/api/v1/jobs").param("q", "golang").header("X-User-Role", "USER"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.items[*].sourceCode", everyItem(nullValue())));
+		mvc.perform(get("/api/v1/jobs/" + id).header("X-User-Role", "USER"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.sourceCode").value(nullValue()))
+				.andExpect(jsonPath("$.externalId").value(nullValue()));
 	}
 
 	@Test
@@ -251,7 +267,8 @@ class JobSearchIT {
 	}
 
 	private ResultActions search(Map<String, String> params) throws Exception {
-		var request = get("/api/v1/jobs").param("source", source);
+		// filtering by source is an admin's view; users are never told where a job came from
+		var request = get("/api/v1/jobs").param("source", source).header("X-User-Role", "ADMIN");
 		params.forEach(request::param);
 		return mvc.perform(request).andExpect(status().isOk());
 	}

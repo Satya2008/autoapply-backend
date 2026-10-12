@@ -7,6 +7,8 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterAll;
@@ -29,6 +31,9 @@ class GatewayRoutingTests {
 	private static final HttpServer matchingService = startFakeService("matching-service");
 
 	private static final HttpServer notificationService = startFakeService("notification-service");
+
+	/** Users whose sessions the fake core-api ended. */
+	private static final Set<String> SIGNED_OUT = ConcurrentHashMap.newKeySet();
 
 	/** The admin the fake core-api knows ("Bearer admin-token"). */
 	static final String ADMIN = "99999999-9999-9999-9999-999999999999";
@@ -245,6 +250,18 @@ class GatewayRoutingTests {
 	}
 
 	@Test
+	void signingOutEverywhereEndsTheSessionAtOnce() throws Exception {
+		String token = "Bearer user-88888888-8888-8888-8888-888888888888";
+		assertThat(send(HttpRequest.newBuilder(uri("/api/v1/me/profile")).header("Authorization", token)).statusCode()).isEqualTo(200);
+
+		send(HttpRequest.newBuilder(uri("/api/v1/auth/logout-everywhere")).header("Authorization", token)
+				.POST(HttpRequest.BodyPublishers.noBody()));
+
+		// the gateway had this session cached; signing out must not wait for that to run out
+		assertThat(send(HttpRequest.newBuilder(uri("/api/v1/me/profile")).header("Authorization", token)).statusCode()).isEqualTo(401);
+	}
+
+	@Test
 	void testHelpersAreNotPublic() throws Exception {
 		assertThat(send(HttpRequest.newBuilder(uri("/api/v1/dev/users?email=a@b.c"))).statusCode()).isEqualTo(404);
 	}
@@ -284,7 +301,7 @@ class GatewayRoutingTests {
 					String token = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8)
 							.replaceAll("(?s).*\"token\"\\s*:\\s*\"([^\"]*)\".*", "$1");
 					String json = token.equals("admin-token") ? "{\"userId\": \"" + ADMIN + "\", \"role\": \"ADMIN\"}"
-							: token.startsWith("user-") ? "{\"userId\": \"" + token.substring(5) + "\", \"role\": \"USER\"}" : null;
+							: token.startsWith("user-") && !SIGNED_OUT.contains(token.substring(5)) ?"{\"userId\": \"" + token.substring(5) + "\", \"role\": \"USER\"}" : null;
 					byte[] bytes = json == null ? new byte[0] : json.getBytes(StandardCharsets.UTF_8);
 					exchange.getResponseHeaders().set("Content-Type", "application/json");
 					exchange.sendResponseHeaders(json == null ? 404 : 200, json == null ? -1 : bytes.length);
@@ -293,6 +310,9 @@ class GatewayRoutingTests {
 					}
 					exchange.close();
 					return;
+				}
+				if (path.equals("/api/v1/auth/logout-everywhere")) {
+					SIGNED_OUT.add(exchange.getRequestHeaders().getFirst("X-User-Id"));
 				}
 				String body = name + " saw " + exchange.getRequestMethod() + " " + path
 						+ " as " + exchange.getRequestHeaders().getFirst("X-User-Id");
