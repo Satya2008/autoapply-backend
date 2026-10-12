@@ -48,9 +48,29 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 		"naukriradar.storage.s3.secret-key=test" })
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
+@org.junit.jupiter.api.condition.EnabledIf("s3IsReachable")
 class S3StorageIT {
 
 	private static final String USER_HEADER = "X-User-Id";
+
+	/**
+	 * Only run when an S3-compatible store is actually listening (SeaweedFS on 8333, see README);
+	 * otherwise skip instead of failing, so the suite stays green on machines without it.
+	 */
+	static boolean s3IsReachable() {
+		String endpoint = System.getProperty("S3_ENDPOINT", System.getenv().getOrDefault("S3_ENDPOINT", "http://127.0.0.1:8333"));
+		try {
+			URI uri = URI.create(endpoint);
+			int port = uri.getPort() < 0 ? 80 : uri.getPort();
+			try (java.net.Socket socket = new java.net.Socket()) {
+				socket.connect(new java.net.InetSocketAddress(uri.getHost(), port), 500);
+				return true;
+			}
+		}
+		catch (Exception ex) {
+			return false;
+		}
+	}
 
 	private final HttpClient http = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).build();
 
