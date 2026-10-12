@@ -51,6 +51,9 @@ class GatewayRoutingTests {
 		registry.add("services.notification-service",
 				() -> "http://localhost:" + notificationService.getAddress().getPort());
 		registry.add("spring.data.redis.database", () -> "1");
+		// A fresh rate-limit key prefix per run so leftover buckets in Redis from an earlier run
+		// don't make these routing tests trip the limiter (the "runs" rule refills slowly).
+		registry.add("naukriradar.rate-limit.key-prefix", () -> "test:" + java.util.UUID.randomUUID());
 	}
 
 	@AfterAll
