@@ -42,6 +42,7 @@ public class Resilience {
 
 	private final CircuitBreakerRegistry breakers;
 	private final RetryRegistry retries;
+	private final RetryRegistry retriesExceptTimeout;
 	private final BulkheadRegistry bulkheads;
 
 	public Resilience(ResilienceProperties properties) {
@@ -59,6 +60,15 @@ public class Resilience {
 				.intervalFunction(IntervalFunction.ofExponentialRandomBackoff(properties.firstBackoff(), 2.0,
 						properties.jitter()))
 				.retryOnException(transientFailure)
+				.build());
+		// Same, but a timed-out call is not retried: waiting again on something that already hung just
+		// delays the caller (e.g. an AI model that stops responding). Failing fast lets the caller fall
+		// back — to the next model or provider — instead. Other transient failures (5xx, 429) still retry.
+		this.retriesExceptTimeout = RetryRegistry.of(RetryConfig.custom()
+				.maxAttempts(properties.maxAttempts())
+				.intervalFunction(IntervalFunction.ofExponentialRandomBackoff(properties.firstBackoff(), 2.0,
+						properties.jitter()))
+				.retryOnException(t -> transientFailure.test(t) && !isTimeout(t))
 				.build());
 		this.bulkheads = BulkheadRegistry.of(BulkheadConfig.custom()
 				.maxConcurrentCalls(properties.maxConcurrent())
@@ -92,6 +102,28 @@ public class Resilience {
 		});
 	}
 
+	/**
+	 * Like {@link #call}, but a call that times out is not retried: it fails fast so the caller can
+	 * fall back to an alternative. Circuit breaker and bulkhead still apply, and non-timeout transient
+	 * failures (5xx, 429, connection refused) still retry. Use it for calls that have their own
+	 * fallback and where a retry of a hung request only makes the caller wait longer.
+	 */
+	public <T> T callNoTimeoutRetry(String dependency, Supplier<T> action) {
+		CircuitBreaker breaker = breakers.circuitBreaker(dependency);
+		Supplier<T> guarded = Bulkhead.decorateSupplier(bulkheads.bulkhead(dependency), action);
+		guarded = CircuitBreaker.decorateSupplier(breaker, guarded);
+		guarded = Retry.decorateSupplier(retriesExceptTimeout.retry(dependency), guarded);
+		try {
+			return guarded.get();
+		}
+		catch (CallNotPermittedException ex) {
+			throw new DependencyUnavailableException(dependency, "it failed repeatedly, calls are paused for a moment", ex);
+		}
+		catch (BulkheadFullException ex) {
+			throw new DependencyUnavailableException(dependency, "too many calls to it are in progress", ex);
+		}
+	}
+
 	public List<DependencyState> states() {
 		return breakers.getAllCircuitBreakers().stream()
 				.map(breaker -> {
@@ -103,6 +135,17 @@ public class Resilience {
 				})
 				.sorted(Comparator.comparing(DependencyState::name))
 				.toList();
+	}
+
+	/** A connect or read timeout anywhere in the cause chain: the call hung rather than failed outright. */
+	static boolean isTimeout(Throwable ex) {
+		for (Throwable t = ex; t != null; t = t.getCause()) {
+			// HttpConnectTimeoutException (connect) extends HttpTimeoutException (read); SocketTimeoutException covers other factories
+			if (t instanceof java.net.http.HttpTimeoutException || t instanceof java.net.SocketTimeoutException) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/** Worth another try: our own markers, network trouble, and 5xx or 429 answers. */

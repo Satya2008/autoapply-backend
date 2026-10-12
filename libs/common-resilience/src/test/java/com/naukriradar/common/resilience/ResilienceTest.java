@@ -45,6 +45,28 @@ class ResilienceTest {
 	}
 
 	@Test
+	void callNoTimeoutRetryDoesNotRetryATimeoutButStillRetriesA5xx() {
+		AtomicInteger timeoutCalls = new AtomicInteger();
+		assertThatThrownBy(() -> resilience.callNoTimeoutRetry("ai-model", () -> {
+			timeoutCalls.incrementAndGet();
+			throw new ResourceAccessException("read timed out", new java.net.SocketTimeoutException("Read timed out"));
+		})).isInstanceOf(ResourceAccessException.class);
+		// a hung call is tried once and then handed back, so the caller can fall over to another model
+		assertThat(timeoutCalls).hasValue(1);
+
+		AtomicInteger serverErrorCalls = new AtomicInteger();
+		String result = resilience.callNoTimeoutRetry("ai-model-2", () -> {
+			if (serverErrorCalls.incrementAndGet() < 3) {
+				throw HttpServerErrorException.create(HttpStatus.SERVICE_UNAVAILABLE, "overloaded", null, null, null);
+			}
+			return "ok";
+		});
+		// a 503 can clear, so it is still retried
+		assertThat(result).isEqualTo("ok");
+		assertThat(serverErrorCalls).hasValue(3);
+	}
+
+	@Test
 	void repeatedFailuresOpenTheCircuitAndLaterCallsFailFast() {
 		AtomicInteger calls = new AtomicInteger();
 		for (int i = 0; i < 2; i++) {

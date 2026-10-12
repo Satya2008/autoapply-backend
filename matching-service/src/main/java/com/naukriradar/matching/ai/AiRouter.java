@@ -154,8 +154,11 @@ public class AiRouter {
 			long started = System.nanoTime();
 			AiCompletion completion;
 			try {
-				// one breaker per model: an overloaded model doesn't pause the provider's others
-				completion = resilience.call("ai-" + provider + "-" + target.model(), () -> client.complete(connection, target.model(), request));
+				// one breaker per model: an overloaded model doesn't pause the provider's others.
+				// A model that times out is not retried on the same model: we fall through to the next
+				// target (the provider's base model, then the next provider) instead of waiting again.
+				completion = resilience.callNoTimeoutRetry("ai-" + provider + "-" + target.model(),
+						() -> client.complete(connection, target.model(), request));
 			}
 			catch (RuntimeException ex) {
 				log.warn("AI provider {} failed for {}: {}", target, request.purpose(), describe(ex));
