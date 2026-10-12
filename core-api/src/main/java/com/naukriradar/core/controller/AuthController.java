@@ -67,8 +67,11 @@ public class AuthController {
 
 	@PostMapping("/change-password")
 	@ResponseStatus(HttpStatus.NO_CONTENT)
-	public void changePassword(@Valid @RequestBody ChangePasswordRequest request) {
-		auth.changePassword(currentUser.currentUserId(), request);
+	public void changePassword(@Valid @RequestBody ChangePasswordRequest request,
+			@RequestHeader(name = HttpHeaders.AUTHORIZATION, required = false) String authorization) {
+		String currentToken = authorization != null && authorization.startsWith("Bearer ")
+				? authorization.substring("Bearer ".length()).strip() : null;
+		auth.changePassword(currentUser.currentUserId(), request, currentToken);
 	}
 
 }

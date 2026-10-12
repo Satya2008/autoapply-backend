@@ -68,6 +68,30 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 				"The resource was changed by another request. Reload it and try again.");
 	}
 
+	/**
+	 * Query and path parameters validated with {@code @Validated} on the controller (e.g. a
+	 * {@code @Size} on a {@code @RequestParam}) fail with this, not with {@link
+	 * MethodArgumentNotValidException}. Without this handler it would fall through to the last-resort
+	 * 500 below, so an over-long search term returned a server error instead of a plain 400.
+	 */
+	@ExceptionHandler(jakarta.validation.ConstraintViolationException.class)
+	ProblemDetail handleConstraintViolation(jakarta.validation.ConstraintViolationException ex) {
+		Map<String, String> errors = new LinkedHashMap<>();
+		for (jakarta.validation.ConstraintViolation<?> violation : ex.getConstraintViolations()) {
+			String field = lastNode(violation.getPropertyPath().toString());
+			errors.putIfAbsent(field, violation.getMessage());
+		}
+		ProblemDetail body = problem(HttpStatus.BAD_REQUEST, "Validation failed", "One or more parameters are invalid.");
+		body.setProperty("errors", errors);
+		return body;
+	}
+
+	/** "suggestLocations.q" -> "q": the method name in front of a parameter path is noise to the client. */
+	private static String lastNode(String propertyPath) {
+		int dot = propertyPath.lastIndexOf('.');
+		return dot >= 0 && dot < propertyPath.length() - 1 ? propertyPath.substring(dot + 1) : propertyPath;
+	}
+
 	/** Last resort: log the details, but never send internals to the client. */
 	@ExceptionHandler(Exception.class)
 	ProblemDetail handleUnexpected(Exception ex) {

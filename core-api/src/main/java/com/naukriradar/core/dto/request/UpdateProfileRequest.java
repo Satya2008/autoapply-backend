@@ -21,7 +21,8 @@ import jakarta.validation.Valid;
  */
 public record UpdateProfileRequest(
 		@Size(max = 100) String fullName,
-		@Size(max = 20) @Pattern(regexp = "^[+0-9 ()-]{7,20}$", message = "must be a valid phone number") String phone,
+		@Size(max = 20) @Pattern(regexp = "^$|^(?=[+0-9 ()-]*[0-9])[+0-9 ()-]{7,20}$",
+				message = "must be a valid phone number") String phone,
 		@Size(max = 100) String location,
 		@Size(max = 100) String currentTitle,
 		@Min(0) @Max(60) Integer experienceYears,

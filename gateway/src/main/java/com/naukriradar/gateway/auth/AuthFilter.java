@@ -26,6 +26,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 import org.springframework.web.server.ServerWebExchange;
+import org.springframework.web.util.UriUtils;
 import reactor.core.publisher.Mono;
 
 /**
@@ -68,7 +69,12 @@ public class AuthFilter implements GlobalFilter, Ordered {
 	@Override
 	public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
 		ServerHttpRequest request = exchange.getRequest();
-		String path = request.getPath().pathWithinApplication().value();
+		// Decode the path before any security check. The raw path keeps percent-encoding (so
+		// "/api/v1/%61dmin/..." would slip past a plain "/api/v1/admin/" prefix check), while the
+		// router matches routes on the decoded path and sends it to the admin backend anyway. We
+		// decode here so the auth guard sees exactly what the router resolved. UriUtils.decode
+		// turns %xx into its character and, unlike URLDecoder, leaves "+" as a literal plus.
+		String path = UriUtils.decode(request.getPath().pathWithinApplication().value(), StandardCharsets.UTF_8);
 		// never trust identity headers from outside
 		ServerHttpRequest clean = request.mutate().headers(h -> {
 			h.remove(USER_HEADER);

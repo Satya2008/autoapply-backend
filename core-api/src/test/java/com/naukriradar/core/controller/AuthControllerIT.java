@@ -115,6 +115,30 @@ class AuthControllerIT {
 				.andExpect(status().isBadRequest());
 	}
 
+	@Test
+	void changingPasswordSignsOutOtherSessionsButKeepsTheCurrentOne() throws Exception {
+		String email = "cp-" + UUID.randomUUID() + "@example.com";
+		String registerBody = register("Change Me", email, "first password 1").andReturn().getResponse().getContentAsString();
+		String current = JsonPath.read(registerBody, "$.token");
+		String userId = JsonPath.read(registerBody, "$.userId");
+		// a second device signs in: a separate session
+		String other = JsonPath.read(login(email, "first password 1").andReturn().getResponse().getContentAsString(), "$.token");
+		resolve(current).andExpect(status().isOk());
+		resolve(other).andExpect(status().isOk());
+
+		// the gateway normally sets X-User-Id from the token; here we send both.
+		mvc.perform(post("/api/v1/auth/change-password").header(USER_HEADER, userId).header("Authorization", "Bearer " + current)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"currentPassword\": \"first password 1\", \"newPassword\": \"second password 2\"}"))
+				.andExpect(status().isNoContent());
+
+		// the other session is gone, the one that changed the password stays alive
+		resolve(other).andExpect(status().isNotFound());
+		resolve(current).andExpect(status().isOk());
+		login(email, "first password 1").andExpect(status().isUnauthorized());
+		login(email, "second password 2").andExpect(status().isOk());
+	}
+
 	private ResultActions register(String name, String email, String password) throws Exception {
 		return mvc.perform(post("/api/v1/auth/register").contentType(MediaType.APPLICATION_JSON)
 				.content("{\"name\": \"" + name + "\", \"email\": \"" + email + "\", \"password\": \"" + password + "\"}"));

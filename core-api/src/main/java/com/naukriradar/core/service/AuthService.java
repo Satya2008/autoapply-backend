@@ -116,8 +116,14 @@ public class AuthService {
 		sessions.revokeAll(userId, clock.instant());
 	}
 
+	/**
+	 * Sets a new password and signs out every <em>other</em> session, keeping only the one that made
+	 * this change (its token given as {@code currentToken}). Someone who changes their password because
+	 * they fear their account is compromised expects any other live session to die; {@code
+	 * currentToken} null (an unusual caller without a bearer token) revokes every session.
+	 */
 	@Transactional
-	public void changePassword(String userId, ChangePasswordRequest request) {
+	public void changePassword(String userId, ChangePasswordRequest request, String currentToken) {
 		User user = users.findById(userId).orElseThrow(() -> new UnauthenticatedException("Sign in again."));
 		if (!user.hasPassword() || !encoder.matches(request.currentPassword(), user.getPasswordHash())) {
 			throw new BadRequestException("The current password is wrong.");
@@ -126,6 +132,13 @@ public class AuthService {
 			throw new BadRequestException("Choose a password different from the current one.");
 		}
 		user.password(encoder.encode(request.newPassword()), false);
+		Instant now = clock.instant();
+		if (currentToken != null && !currentToken.isBlank()) {
+			sessions.revokeAllExcept(userId, hash(currentToken), now);
+		}
+		else {
+			sessions.revokeAll(userId, now);
+		}
 	}
 
 	@Transactional(readOnly = true)

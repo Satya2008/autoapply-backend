@@ -96,13 +96,27 @@ client ──► gateway :8080 ─┬─► core-api         :8081 ──► MyS
 | job-service health | http://localhost:8082/actuator/health |
 | matching-service health | http://localhost:8083/actuator/health |
 
+## Security model
+
+Sign-in is against our own users table: BCrypt passwords, random 32-byte session tokens of
+which only the SHA-256 is stored, five wrong passwords lock an account for 15 minutes, and a
+session lasts 30 days. The gateway is the one place that turns a `Authorization: Bearer <token>`
+into the caller: it calls core-api to resolve the token, then sets `X-User-Id` and `X-User-Role`
+on the forwarded request (stripping whatever the client sent in those headers first). `/api/v1/admin/**`
+needs `X-User-Role: ADMIN`; the admin check decodes the path first, so a percent-encoded
+`/api/v1/%61dmin/...` cannot slip past it. Changing a password or disabling a user revokes the
+other sessions at once.
+
+> **Deployment requirement.** The services trust the `X-User-Id` / `X-User-Role` headers the
+> gateway sets; they do not re-verify them. Anyone who can reach a service port directly
+> (8081–8085) can therefore impersonate any user or admin. Bind those ports to localhost or a
+> private network and expose **only** the gateway (8080). Do not publish a service port.
+
 ## Try the API
 
-There is no login yet. The caller is identified by an `X-User-Id` header. From Phase 8 the
-gateway verifies a JWT and sets this header itself.
-
-1. `POST /api/v1/dev/users` with `{"email": "you@example.com"}` and copy the returned `id`.
-2. In Swagger UI, click **Authorize** and paste that id.
+1. `POST /api/v1/auth/register` with `{"name": "...", "email": "you@example.com", "password": "..."}`
+   and copy the returned `token` (or `POST /api/v1/auth/login` for an existing account).
+2. In Swagger UI, click **Authorize** and paste `Bearer <token>`.
 3. Call `GET/PUT /api/v1/me/profile` and `GET/PUT /api/v1/me/skills`.
 4. Upload a resume with `POST /api/v1/me/resume` (multipart field `file`, PDF or DOCX, up
    to 10 MB). The response lists the skills found; they are added to the profile without
