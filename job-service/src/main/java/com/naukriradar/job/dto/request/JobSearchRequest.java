@@ -17,6 +17,7 @@ public record JobSearchRequest(
 		@Size(max = 40) String source,
 		@Size(max = 10) String region,
 		@Min(1) @Max(365) Integer postedWithinDays,
+		JobSort sort,
 		@Size(max = 200) String cursor,
 		@Min(1) @Max(100) Integer limit) {
 
@@ -24,11 +25,15 @@ public record JobSearchRequest(
 
 	/** The same search without a source filter (users may not pick sources). */
 	public JobSearchRequest withoutSource() {
-		return new JobSearchRequest(q, location, remote, null, region, postedWithinDays, cursor, limit);
+		return new JobSearchRequest(q, location, remote, null, region, postedWithinDays, sort, cursor, limit);
 	}
 
 	public int limitOrDefault() {
 		return limit == null ? DEFAULT_LIMIT : limit;
+	}
+
+	public JobSort sortOrDefault() {
+		return sort == null ? JobSort.NEWEST : sort;
 	}
 
 }

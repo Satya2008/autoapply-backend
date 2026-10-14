@@ -45,8 +45,9 @@ naukriradar:
     seed-defaults: true
     schedule:
       enabled: true
-      # 9:00 and 13:00 India time; a source with a small free quota asks for fewer runs (fetchEveryHours)
-      fetch-cron: "0 0 9,13 * * *"
+      # twice a day, morning and evening India time (so evening postings show up the same day);
+      # a source with a small free quota asks for fewer runs (fetchEveryHours)
+      fetch-cron: "0 0 9,21 * * *"
       zone: Asia/Kolkata
       cleanup-cron: "0 30 3 * * *"
       close-after-days: 7

@@ -14,7 +14,7 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
 @ConfigurationProperties("naukriradar.jobs.schedule")
 public record JobScheduleProperties(
 		@DefaultValue("true") boolean enabled,
-		@DefaultValue("0 0 9,13 * * *") String fetchCron,
+		@DefaultValue("0 0 9,21 * * *") String fetchCron,
 		@DefaultValue("Asia/Kolkata") String zone,
 		@DefaultValue("0 30 3 * * *") String cleanupCron,
 		@DefaultValue("7") int closeAfterDays,

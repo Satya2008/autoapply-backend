@@ -21,6 +21,15 @@ class SearchCursorTest {
 	}
 
 	@Test
+	void roundTripsWithASalaryRank() {
+		SearchCursor cursor = new SearchCursor(Instant.parse("2026-10-03T10:15:30.123456Z"), UUID.randomUUID().toString(), 2_500_000L);
+
+		SearchCursor back = SearchCursor.decode(cursor.encode());
+		assertThat(back).isEqualTo(cursor);
+		assertThat(back.rank()).isEqualTo(2_500_000L);
+	}
+
+	@Test
 	void encodedFormIsUrlSafe() {
 		SearchCursor cursor = new SearchCursor(Instant.parse("2026-10-03T10:15:30Z"), UUID.randomUUID().toString());
 

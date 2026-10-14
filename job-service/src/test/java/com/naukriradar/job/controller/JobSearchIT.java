@@ -155,6 +155,35 @@ class JobSearchIT {
 	}
 
 	@Test
+	void sortsByOldestAndBySalary() throws Exception {
+		// newest (default): the undated job sorts by when it was found (now), so it leads
+		search(Map.of()).andExpect(jsonPath("$.items[0].title").value("100% Remote QA_Lead"));
+		// oldest first reverses it: the 40-day-old job leads
+		search(Map.of("sort", "OLDEST")).andExpect(jsonPath("$.items[0].title").value("Golang Engineer"));
+
+		// two jobs with a salary; salary sort puts the higher first, ahead of every job with no stated pay
+		save(TestJobs.job("p1", "Principal Engineer", "PayCo", "Remote", true, daysAgo(10), 3_000_000L, 5_000_000L),
+				TestJobs.job("p2", "Lead Engineer", "MidCo", "Pune", false, daysAgo(1), 1_500_000L, 2_500_000L));
+
+		// page one job at a time so the salary cursor is exercised too
+		List<String> seen = new ArrayList<>();
+		String cursor = null;
+		int pages = 0;
+		do {
+			Map<String, String> params = cursor == null ? Map.of("sort", "SALARY", "limit", "1")
+					: Map.of("sort", "SALARY", "limit", "1", "cursor", cursor);
+			String body = search(params).andReturn().getResponse().getContentAsString();
+			seen.addAll(JsonPath.read(body, "$.items[*].title"));
+			cursor = JsonPath.read(body, "$.nextCursor");
+			pages++;
+		}
+		while (cursor != null && pages < 20);
+
+		assertThat(seen).startsWith("Principal Engineer", "Lead Engineer");
+		assertThat(seen).doesNotHaveDuplicates().hasSize(9);
+	}
+
+	@Test
 	void keysetPagingVisitsEveryJobOnceNewestFirst() throws Exception {
 		List<String> seen = new ArrayList<>();
 		String cursor = null;

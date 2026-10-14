@@ -16,6 +16,7 @@ import java.util.TimeZone;
 import com.naukriradar.common.exception.NotFoundException;
 import com.naukriradar.job.config.CacheConfig;
 import com.naukriradar.job.dto.request.JobSearchRequest;
+import com.naukriradar.job.dto.request.JobSort;
 import com.naukriradar.job.dto.response.JobDetailResponse;
 import com.naukriradar.job.dto.response.JobSearchResponse;
 import com.naukriradar.job.dto.response.JobSummaryResponse;
@@ -44,6 +45,12 @@ public class JobSearchService {
 	private static final String COLUMNS = """
 			id, source_code, external_id, title, company, location, remote, salary_min, salary_max,
 			currency, posted_at, sort_at, apply_url""";
+
+	/** The number a job is ranked by when sorting by salary; jobs without one get this sentinel, below any real pay. */
+	private static final long NO_SALARY = -1;
+
+	/** Rank by the top of the stated range, falling back to the bottom, then to "no salary". */
+	private static final String SALARY_KEY = "COALESCE(salary_max, salary_min, " + NO_SALARY + ")";
 
 	private final NamedParameterJdbcTemplate jdbc;
 	private final JsonMapper json;
@@ -110,22 +117,37 @@ public class JobSearchService {
 			sql.append(" AND sort_at >= :since");
 			params.addValue("since", utc(clock.instant().minus(Duration.ofDays(request.postedWithinDays()))));
 		}
+		JobSort sort = request.sortOrDefault();
 		if (hasText(request.cursor())) {
 			SearchCursor cursor = SearchCursor.decode(request.cursor().strip());
-			// row-by-row "(sort_at, id) < (cursorSortAt, cursorId)", written so MySQL can use the index
-			sql.append(" AND (sort_at < :cursorSortAt OR (sort_at = :cursorSortAt AND id < :cursorId))");
 			params.addValue("cursorSortAt", utc(cursor.sortAt()));
 			params.addValue("cursorId", cursor.id());
+			// row-by-row "after the last row I saw" in the chosen order, written so an index can seek to it
+			switch (sort) {
+				case NEWEST -> sql.append(" AND (sort_at < :cursorSortAt OR (sort_at = :cursorSortAt AND id < :cursorId))");
+				case OLDEST -> sql.append(" AND (sort_at > :cursorSortAt OR (sort_at = :cursorSortAt AND id > :cursorId))");
+				case SALARY -> {
+					params.addValue("cursorRank", cursor.rank() == null ? NO_SALARY : cursor.rank());
+					sql.append(" AND (").append(SALARY_KEY).append(" < :cursorRank OR (").append(SALARY_KEY)
+							.append(" = :cursorRank AND (sort_at < :cursorSortAt OR (sort_at = :cursorSortAt AND id < :cursorId))))");
+				}
+			}
 		}
 		// one extra row tells us whether there is a next page
-		sql.append(" ORDER BY sort_at DESC, id DESC LIMIT :limit");
+		sql.append(switch (sort) {
+			case NEWEST -> " ORDER BY sort_at DESC, id DESC";
+			case OLDEST -> " ORDER BY sort_at ASC, id ASC";
+			case SALARY -> " ORDER BY " + SALARY_KEY + " DESC, sort_at DESC, id DESC";
+		});
+		sql.append(" LIMIT :limit");
 		params.addValue("limit", limit + 1);
 
 		List<Row> rows = jdbc.query(sql.toString(), params, (rs, n) -> row(rs));
 		boolean more = rows.size() > limit;
 		List<Row> page = more ? rows.subList(0, limit) : rows;
 		Row last = page.isEmpty() ? null : page.get(page.size() - 1);
-		String nextCursor = more ? new SearchCursor(last.sortAt(), last.summary().id()).encode() : null;
+		Long rank = sort == JobSort.SALARY && last != null ? effectiveSalary(last) : null;
+		String nextCursor = more ? new SearchCursor(last.sortAt(), last.summary().id(), rank).encode() : null;
 		return new JobSearchResponse(page.stream().map(Row::summary).toList(), nextCursor);
 	}
 
@@ -146,6 +168,16 @@ public class JobSearchService {
 			throw new NotFoundException("No job " + id + ".");
 		}
 		return found.get(0);
+	}
+
+	/** The salary this row is ranked by: the same value {@link #SALARY_KEY} computes in SQL. */
+	private static long effectiveSalary(Row row) {
+		Long max = row.summary().salaryMax();
+		if (max != null) {
+			return max;
+		}
+		Long min = row.summary().salaryMin();
+		return min != null ? min : NO_SALARY;
 	}
 
 	private JsonNode requirements(String parsedJson) {
